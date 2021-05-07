@@ -15,21 +15,6 @@ data=pd.read_csv(f)
 tree = ncbi.get_topology(list(set(data.taxaID)))
 tree.write(format=1, outfile="ncbi_tree_bs.nw")
 
-f='for_ete3_intersections_genus.csv'
-data=pd.read_csv(f)
-tree = ncbi.get_topology(list(set(data.taxaID)))
-tree.write(format=1, outfile="ncbi_tree_intersections_genus.nw")
-
-f='for_ete3_bs_genus.csv'
-data=pd.read_csv(f)
-tree = ncbi.get_topology(list(set(data.taxaID)))
-tree.write(format=1, outfile="ncbi_tree_bs_genus.nw")
-
-f='for_ete3_cluster_genus.csv'
-data=pd.read_csv(f)
-tree = ncbi.get_topology(list(set(data.taxaID)))
-tree.write(format=1, outfile="ncbi_tree_intersections_cluster_genus.nw")
-
 f='for_ete3_cluster_species.csv'
 data=pd.read_csv(f)
 tree = ncbi.get_topology(list(set(data.taxaID)))

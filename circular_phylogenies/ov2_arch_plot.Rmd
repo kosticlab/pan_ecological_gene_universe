@@ -1,0 +1,213 @@
+---
+title: "ov2_arch_plot.Rmd"
+author: "Braden T Tierney"
+date: "3/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(taxonomizr)
+library(phylobase)
+library(ggnewscale)
+library(ggtree)
+```
+
+```{r}
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/arch_plot/')
+
+files = c("AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_gene_taxID_ecology.txt",'gene_taxID_ecology.txt','GUT_ENV_CONGENES_SEQS_gene_taxID_ecology.txt','HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_gene_taxID_ecology.txt')
+full_data = list()
+for(f in files){
+  if(f=='gene_taxID_ecology.txt'){
+   data = read.table(f,header=T) %>% mutate(ecology = toupper(ecology),intersection_class = 'HUMAN') 
+  full_data[[f]]=data
+  }
+  else{
+  data = read.table(f,header=T) %>% mutate(ecology = toupper(ecology),intersection_class = f %>% strsplit('_CONGENES') %>% map_chr(1))
+  full_data[[f]]=data
+  }
+}
+
+data_int = bind_rows(full_data) %>% filter(taxaID != 0 & taxaID != 2) %>% filter(intersection_class != 'HUMAN')
+
+#get intersection data for plot
+taxaID_counts = data_int %>% select(taxaID) %>%group_by(taxaID) %>% count
+colnames(taxaID_counts)[2]='count'
+
+data_wide = data_int %>% select(taxaID,ecology) %>% group_by(taxaID,ecology) %>% count %>% spread(ecology,n)
+data_wide[is.na(data_wide)] = 0
+data_wide = left_join(data_wide,taxaID_counts) %>% filter(HUMAN_GUT != 0)
+
+#labs=unique(data_wide$taxaID)
+#labellist_int=list()
+#for(lab in labs){
+#  labellist_int[[lab]]=suppressWarnings(getTaxonomy(lab,'accessionTaxa.sql'))
+#}
+
+
+#labellist_int=as.data.frame(do.call('rbind',labellist_int)) %>% rownames_to_column() 
+
+#saveRDS(labellist_int,'labellist_int.rds')
+
+labellist_int = readRDS('labellist_int.rds')
+
+phylum_species_mapping_int = labellist_int %>% filter(superkingdom == 'Bacteria' | superkingdom == 'Archaea'  | superkingdom == 'Viruses' ) %>% select(rowname,phylum,species)
+phylum_species_mapping_int$rowname = as.numeric(phylum_species_mapping_int$rowname)
+data_wide = left_join(data_wide,phylum_species_mapping_int,by=c('taxaID'='rowname'))
+data_wide_species_only = data_wide %>% filter(!is.na(species)) 
+data_wide_species_only_high_counts = data_wide_species_only 
+
+duplicated_species = data_wide_species_only_high_counts[duplicated(data_wide_species_only_high_counts$species),] %>%ungroup %>% select(species) %>% unlist %>% unname %>% unique
+for(s in duplicated_species){
+  data_wide_species_only_high_counts$taxaID[data_wide_species_only_high_counts$species==s] = data_wide_species_only_high_counts$taxaID[data_wide_species_only_high_counts$species==s][[1]]
+}
+
+data_wide_species_only_high_counts_numeric = data_wide_species_only_high_counts %>% select_if(is.numeric) %>% group_by(taxaID) %>% summarise(across(everything(), list(sum)))
+data_wide_species_only_high_counts_numeric_char =data_wide_species_only_high_counts %>% select_if((is.character)) %>% unique()
+
+data_wide_species_only_high_counts = inner_join(data_wide_species_only_high_counts_numeric,data_wide_species_only_high_counts_numeric_char) %>% arrange(desc(count_1))  %>% head(250)
+
+write.csv(data_wide_species_only_high_counts %>% select(taxaID),paste('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/arch_plot/for_ete3_intersections.csv',sep=''))
+
+saveRDS(data_wide_species_only_high_counts,'data_wide_species_only_high_counts_intersections.rds')
+```
+
+
+```{r}
+
+####human microbiome comparison
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/arch_plot/')
+
+data_annotation = read.csv('gene_taxID_ecology_human_vs_non_gut.txt',sep='\t') %>% filter(taxaID != 0, taxaID !=1, taxaID !=2)
+
+data_wide = data_annotation %>% select(taxaID,ecology) %>% group_by(taxaID,ecology) %>% count %>% spread(ecology,n)
+
+taxaID_counts = data_annotation %>% select(taxaID) %>% table %>% data.frame
+colnames(taxaID_counts)[2]='count'
+colnames(taxaID_counts)[1]='taxaID'
+
+
+data_wide[is.na(data_wide)] = 0
+data_wide$taxaID=as.factor(data_wide$taxaID)
+data_wide = left_join(data_wide,taxaID_counts)
+
+labs=unique(taxaID_counts$taxaID)
+labellist=list()
+for(lab in labs){
+  labellist[[lab]]=suppressWarnings(getTaxonomy(lab,'accessionTaxa.sql'))
+}
+
+labellist=as.data.frame(do.call('rbind',labellist)) %>% rownames_to_column() 
+phylum_species_mapping = labellist %>% filter(superkingdom == 'Bacteria' | superkingdom == 'Archaea'  | superkingdom == 'Viruses' ) %>% select(rowname,phylum,species)
+phylum_species_mapping$rowname = as.factor(phylum_species_mapping$rowname)
+data_wide = left_join(data_wide,phylum_species_mapping,by=c('taxaID'='rowname'))
+
+data_wide_species_only = data_wide %>% filter(!is.na(species)) 
+data_wide_species_only$taxaID =as.factor(data_wide_species_only$taxaID)
+data_wide_species_only = left_join(data_wide_species_only,taxaID_counts) 
+
+data_wide_species_only_high_counts = data_wide_species_only
+
+duplicated_species = data_wide_species_only_high_counts[duplicated(data_wide_species_only_high_counts$species),] %>%ungroup %>% select(species) %>% unlist %>% unname %>% unique
+for(s in duplicated_species){
+  data_wide_species_only_high_counts$taxaID[data_wide_species_only_high_counts$species==s] = data_wide_species_only_high_counts$taxaID[data_wide_species_only_high_counts$species==s][[1]]
+}
+
+data_wide_species_only_high_counts$taxaID = as.numeric(as.character(data_wide_species_only_high_counts$taxaID))
+data_wide_species_only_high_counts_numeric = data_wide_species_only_high_counts %>% select_if(is.numeric) %>% group_by(taxaID) %>% summarise(across(everything(), list(sum)))
+data_wide_species_only_high_counts$taxaID = as.character(data_wide_species_only_high_counts$taxaID)
+data_wide_species_only_high_counts_numeric_char =data_wide_species_only_high_counts %>% select_if((is.character)) %>% unique()
+data_wide_species_only_high_counts_numeric_char$taxaID = as.numeric(data_wide_species_only_high_counts_numeric_char$taxaID)
+
+data_wide_species_only_high_counts = inner_join(data_wide_species_only_high_counts_numeric,data_wide_species_only_high_counts_numeric_char) %>% arrange(desc(count_1)) %>% head(250)
+
+write.csv(data_wide_species_only_high_counts %>% select(taxaID),paste('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/arch_plot/for_ete3_human_nongut_species.csv',sep=''))
+
+saveRDS(data_wide_species_only_high_counts,'data_wide_species_only_high_counts_human_nongut_species.rds')
+```
+
+```{r}
+###intersections
+
+#build tree in python and place in relevant directory 
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/arch_plot/')
+
+tree=phytools::read.newick('ncbi_tree_intersections.nw')
+
+data_wide_species_only_high_counts = readRDS('data_wide_species_only_high_counts_intersections.rds')
+
+data_wide_species_only_high_counts_tipmatched = data_wide_species_only_high_counts %>% filter(taxaID %in% tree$tip.label) %>% column_to_rownames('taxaID')
+data_wide_species_only_high_counts_tipmatched = data_wide_species_only_high_counts_tipmatched[order(match(rownames(data_wide_species_only_high_counts_tipmatched), tree$tip.label)),]
+
+phyla_of_interest = data_wide_species_only_high_counts_tipmatched %>% ungroup %>% select(phylum) %>% table %>% data.frame %>% filter(Freq>5) %>% select('.') 
+
+colnames(phyla_of_interest) = c('phylum')
+phyla_of_interest$color = as.character(phyla_of_interest$phylum)
+
+data_wide_species_only_high_counts_tipmatched = left_join(data_wide_species_only_high_counts_tipmatched,phyla_of_interest)
+data_wide_species_only_high_counts_tipmatched$color[is.na(data_wide_species_only_high_counts_tipmatched$color)] = 'Other'
+
+tree$tip.label = paste(data_wide_species_only_high_counts_tipmatched$species,' (n = ',data_wide_species_only_high_counts_tipmatched$count,')',sep='')
+rownames(data_wide_species_only_high_counts_tipmatched) = paste(data_wide_species_only_high_counts_tipmatched$species,' (n = ',data_wide_species_only_high_counts_tipmatched$count,')',sep='')
+
+colnames(data_wide_species_only_high_counts_tipmatched) = lapply(colnames(data_wide_species_only_high_counts_tipmatched), function(x) gsub('_1','',x))
+
+tr2 <- phylo4d(tree, data_wide_species_only_high_counts_tipmatched,rownamesAsLabels=TRUE, match.data=F)
+
+mappingfile_heatmap = data_wide_species_only_high_counts_tipmatched %>% select(HUMAN_GUT,MICE,CHICKEN_CECEUM,COW,SOIL,GLACIER_PERMAFROST,AQUATIC,AQUATIC_SEDIMENT)
+mappingfile_heatmap = mappingfile_heatmap/data_wide_species_only_high_counts_tipmatched$count
+rownames(mappingfile_heatmap) = paste(data_wide_species_only_high_counts_tipmatched$species,' (n = ',data_wide_species_only_high_counts_tipmatched$count,')',sep='')
+
+p = ggtree(tr2,layout = 'circ',aes(color=color))+geom_tiplab(size=8 ,align=TRUE, linesize=.5,offset = 6) +theme_tree2()
+p1 = gheatmap(p,data=mappingfile_heatmap, colnames_angle=90,hjust=1,offset=0, width=.5, colnames=TRUE, legend_title=element_blank()) + scale_x_ggtree()+scale_fill_viridis_c(option="B")+scale_y_continuous(expand=c(0, 0.3))#+ theme(legend.position="none")
+
+
+ggsave(plot = p1,'circ_plot_int.pdf',height=30,width=30)
+
+```
+
+```{r}
+###human nongut species
+
+#build tree in python and place in relevant directory 
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/arch_plot/')
+
+tree=phytools::read.newick('ncbi_tree_intersections_human_nongut_species.nw')
+
+data_wide_species_only_high_counts = readRDS('data_wide_species_only_high_counts_human_nongut_species.rds')
+
+data_wide_species_only_high_counts_tipmatched = data_wide_species_only_high_counts %>% filter(taxaID %in% tree$tip.label) %>% column_to_rownames('taxaID')
+data_wide_species_only_high_counts_tipmatched = data_wide_species_only_high_counts_tipmatched[order(match(rownames(data_wide_species_only_high_counts_tipmatched), tree$tip.label)),]
+
+phyla_of_interest = data_wide_species_only_high_counts_tipmatched %>% ungroup %>% select(phylum) %>% table %>% data.frame %>% filter(Freq>5) %>% select('.') 
+
+colnames(phyla_of_interest) = c('phylum')
+phyla_of_interest$color = as.character(phyla_of_interest$phylum)
+
+data_wide_species_only_high_counts_tipmatched = left_join(data_wide_species_only_high_counts_tipmatched,phyla_of_interest)
+data_wide_species_only_high_counts_tipmatched$color[is.na(data_wide_species_only_high_counts_tipmatched$color)] = 'Other'
+
+tree$tip.label = paste(data_wide_species_only_high_counts_tipmatched$species,' (n = ',data_wide_species_only_high_counts_tipmatched$count,')',sep='')
+rownames(data_wide_species_only_high_counts_tipmatched) = paste(data_wide_species_only_high_counts_tipmatched$species,' (n = ',data_wide_species_only_high_counts_tipmatched$count,')',sep='')
+
+colnames(data_wide_species_only_high_counts_tipmatched) = lapply(colnames(data_wide_species_only_high_counts_tipmatched), function(x) gsub('_1','',x))
+
+tr2 <- phylo4d(tree, data_wide_species_only_high_counts_tipmatched,rownamesAsLabels=TRUE, match.data=F)
+
+mappingfile_heatmap = data_wide_species_only_high_counts_tipmatched %>% select(human_gut ,human_oral,airways, nasal, skin,vaginal)
+mappingfile_heatmap = mappingfile_heatmap/data_wide_species_only_high_counts_tipmatched$count
+rownames(mappingfile_heatmap) = paste(data_wide_species_only_high_counts_tipmatched$species,' (n = ',data_wide_species_only_high_counts_tipmatched$count,')',sep='')
+
+p = ggtree(tr2,layout = 'circ',aes(color=color))+geom_tiplab(size=8 ,align=TRUE, linesize=.5,offset = 5) + theme_tree2()
+p1 = gheatmap(p,data=mappingfile_heatmap, colnames_angle=90,hjust=1,offset=0, width=.5, colnames=TRUE, legend_title=element_blank()) + scale_x_ggtree()+scale_fill_viridis_c(option="B")+scale_y_continuous(expand=c(0, 0.3))
+
+ggsave(plot = p1,'circ_plot_human_nongut_species.pdf',height=30,width=30)
+
+```

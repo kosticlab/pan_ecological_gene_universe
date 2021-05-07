@@ -9,17 +9,18 @@ from collections import Counter
 import pandas as pd
 from collections import defaultdict
 
-#find files
-files=os.listdir('.')
-files=[x for x in files if 'tsv' in x]
-files=[x for x in files if 'multi' not in x]
-files=[x for x in files if 'iterative' not in x]
-files.sort()
-files2=files[:2]
-files2.reverse()
-files=files[2:]
-files=[files2[0]]+files+[files2[1]]
-files.reverse()
+#argument is a file containing the location of the files to be mapped together.
+
+#eg in the following format (order matters) sans pound signs:
+
+#clustering_output_100.tsv
+#clustering_output_95.tsv
+#clustering_output_90.tsv
+
+files = []
+with open(sys.argv[1]) as f:
+	for line in f:
+		files.append(line.rstrip())
 
 
 print("Loading data and generating cluster frequency files.")
@@ -61,19 +62,5 @@ for i,fi in enumerate(files):
 countframes_merged=pd.concat(countframes,axis=1)
 countframes_merged=countframes_merged.fillna(0)
 countframes_merged.to_csv('iterative_cluster_sizes.tsv',sep='\t')
-
-#print("Generating master list of clustering mapping.")
-
-#merge output
-#with open('iterative_linclust_output_cluster_tracker.tsv','w') as w:
-#	for val in initial_ids:
-#		outputLine=[]
-#		outputLine.append(val)
-#		val2=val
-#		for j in range(len(dictList)):
-#			dicto=dictList[j]
-#			val2=dicto[val2]
-#			outputLine.append(val2)
-#		w.write('\t'.join(outputLine)+'\n')
 
 

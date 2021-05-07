@@ -3,7 +3,7 @@ import pandas as pd
 from collections import Counter
 import sys
 
-#load the processed multi map file
+#load the processed file containing mapping between raw genes and consensus genes
 inputfile = sys.argv[1]
 
 rawdata=[]
