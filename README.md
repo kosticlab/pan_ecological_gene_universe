@@ -1,3 +1,5 @@
+This repository contains code to reproduce the work in the manuscript "A pan-ecological metagenomic database reveals over 1,800 genes conserved across microbial ecosystems" by Braden T Tierney, Samuel Zimmerman, Chirag J Patel, Aleksandar D Kostic.
+
 ## Resource location:
 
 https://microbial-genes.bio/
