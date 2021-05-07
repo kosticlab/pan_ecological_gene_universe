@@ -25,7 +25,7 @@ The scripts used in assemble/assembly_scripts were used to assemble and function
 
 ### Run (iterative) clustering
 
-These scripts are in the "clustering" folder. The second round of clustering for 90%, 50%, and 30% identity used mmseqs cluster instead of linclust, lacked the loop but otherwise had the same parameters. THe python parsing scripts help map between raw and consensus genes.
+These scripts are in the "clustering" folder. The second round of clustering for 90%, 50%, and 30% identity used mmseqs cluster instead of linclust, lacked the loop but otherwise had the same parameters. The python parsing scripts help map between raw and consensus genes.
 
 This also contains a python script for finding "overlaps" between genes in terms of the ecologies they assemble in (find_gene_ecology_overlaps.py). The output of this file is used to find the pan-ecological-genes. The input file is made by cutting (the bash command) the first column of the iterative mapping file made by create_linclust_mapping_file.py and whatever consensus gene ID column corresponds to your percent identity of interest.
 
