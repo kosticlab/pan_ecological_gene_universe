@@ -117,7 +117,7 @@ gtdb_prevalence/scripts/make_gtdbtk_prevalence_plots.Rmd visualizes the prevalen
 
 ### Get circular phylogency plots (F6/7)
 
-The python script is used to build the phylogenetic tree in the circular phylogeny plot. The R script is used to generate the plots themselves (and must be run both before and after the python script.)
+The python script is used to build the phylogenetic tree in the circular phylogeny plot. The R script is used to generate the plots themselves (and must be run both before and after the python script). Data used to generate plots are in the circ_plot_data.zip file on the Figshare resource.
 
 #### Count number of genes in each sample
 
