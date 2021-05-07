@@ -29,13 +29,11 @@ def run_sampling(i):
 i=sys.argv[1]
 shuffle = sys.argv[2]
 
-#data=pd.read_csv('multi_map_30.tsv',sep='\t')
-#data.columns=[0,1]
-#print('Loaded')
-#data.index=data[1].str.split('_').str[1]
-#data[0]=data[0].str.split('_').str[0]
-
-data=pd.read_csv('multi_map_30_collapsed_processed.csv',header=None,index_col=0)
+data=pd.read_csv('multi_map_30.tsv',sep='\t')
+data.columns=[0,1]
+print('Loaded')
+data.index=data[1].str.split('_').str[1]
+data[0]=data[0].str.split('_').str[0]
 
 metadata = pd.read_csv('metadata_100_filtered.tsv',sep='\t',index_col=0)
 all_samples_df = metadata.loc[:,['prokka_id','ecology']]

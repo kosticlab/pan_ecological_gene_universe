@@ -10,6 +10,8 @@ The scripts used in assemble/assembly_scripts were used to assemble and function
 
 These scripts are in the "clustering" folder. The second round of clustering for 90%, 50%, and 30% identity used mmseqs cluster instead of linclust, lacked the loop but otherwise had the same parameters. THe python parsing scripts help map between raw and consensus genes.
 
+This also contains a python script for finding "overlaps" between genes in terms of the ecologies they assemble in (find_gene_ecology_overlaps.py). The output of this file is used to find the pan-ecological-genes. The input file is made by cutting (the bash command) the first column of the iterative mapping file made by create_linclust_mapping_file.py and whatever consensus gene ID column corresponds to your percent identity of interest.
+
 ### Get functional and taxonomic annotations for our consensus genes
 
 The scripts used in get_protein_taxa_annotations_cons_seqs/scripts were used to get the functional and taxonomic annotations for all 117 million consensus sequences
@@ -29,7 +31,7 @@ get_cluster_and_taxa_each_gene.Rmd gets the taxonomy and cluster for every conse
 
 run_SVD_on_clusters.Rmd uses calc_svd.bash to run SVD on our samples.
 
-### Enrichemnts
+### Enrichments
 
 The scripts used in UMAP_enrichments/scripts were used to see what taxa and functions were enriched in each UMAP cluster.
 
