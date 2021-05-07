@@ -4,6 +4,10 @@ This repository contains code to reproduce the work in the manuscript "A pan-eco
 
 https://microbial-genes.bio/
 
+## Code and scripts
+
+This code is provided for reproducibility and clarify of our methods. Some scripts were run on a High-Performance-Computing cluster with a slurm-based job submission system. This will be apparent based on certain absolute paths and submission commands used in specific text files.
+
 ### Get all annotation data for every consensus sequence in our database
 
 get_full_consensus_seq_annotations.Rmd
