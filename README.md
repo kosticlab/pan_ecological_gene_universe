@@ -1,3 +1,7 @@
+## Resource location:
+
+https://microbial-genes.bio/
+
 ### Get all annotation data for every consensus sequence in our database
 
 get_full_consensus_seq_annotations.Rmd
