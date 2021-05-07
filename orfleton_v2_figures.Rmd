@@ -34,126 +34,6 @@ theme_set(theme_cowplot())
 ```
 
 ```{r}
-#distribution of gene sizes at 90, 70, 50, 30, 10 percent identity
-setwd('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/')
-clustersizes_oral=read.csv('iterative_cluster_sizes_oral',sep='\t')
-colnames(clustersizes_oral)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_gut=read.csv('iterative_cluster_sizes_gut',sep='\t')
-colnames(clustersizes_gut)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_vaginal=read.csv('iterative_cluster_sizes_vagina',sep='\t')
-colnames(clustersizes_vaginal)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_nasal=read.csv('iterative_cluster_sizes_nasal',sep='\t')
-colnames(clustersizes_nasal)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_skin=read.csv('iterative_cluster_sizes_skin',sep='\t')
-colnames(clustersizes_skin)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_airways=read.csv('iterative_cluster_sizes_airways',sep='\t')
-colnames(clustersizes_airways)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_pan=read.csv('iterative_cluster_sizes_pan',sep='\t')
-colnames(clustersizes_pan)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_env=read.csv('iterative_cluster_sizes_env',sep='\t')
-colnames(clustersizes_env)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-clustersizes_host=read.csv('iterative_cluster_sizes_host',sep='\t')
-colnames(clustersizes_host)=c('Cluster_Size','100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-
-generate_cluster_plots <- function(pid){
-
-  clustersizes_vaginal = clustersizes_vaginal %>% select(Cluster_Size,pid)
-  colnames(clustersizes_vaginal)=c('Cluster_Size','value')
-  clustersizes_nasal = clustersizes_nasal %>% select(Cluster_Size,pid)
-  colnames(clustersizes_nasal)=c('Cluster_Size','value')
-  clustersizes_airways = clustersizes_airways %>% select(Cluster_Size,pid)
-  colnames(clustersizes_airways)=c('Cluster_Size','value')
-  clustersizes_gut = clustersizes_gut %>% select(Cluster_Size,pid)
-  colnames(clustersizes_gut)=c('Cluster_Size','value')
-  clustersizes_oral = clustersizes_oral %>% select(Cluster_Size,pid)
-  colnames(clustersizes_oral)=c('Cluster_Size','value')
-  clustersizes_skin = clustersizes_skin %>% select(Cluster_Size,pid)
-  colnames(clustersizes_skin)=c('Cluster_Size','value')
-  clustersizes_env = clustersizes_env %>% select(Cluster_Size,pid)
-  colnames(clustersizes_env)=c('Cluster_Size','value')
-  clustersizes_host = clustersizes_host %>% select(Cluster_Size,pid)
-  colnames(clustersizes_host)=c('Cluster_Size','value')
-  clustersizes_pan = clustersizes_pan %>% select(Cluster_Size,pid)
-  colnames(clustersizes_pan)=c('Cluster_Size','value')
-
-  merged_cluster_data=merge(clustersizes_vaginal,clustersizes_nasal,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_airways,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_skin,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_oral,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_gut,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_pan,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_host,by='Cluster_Size',all = TRUE)
-  merged_cluster_data=merge(merged_cluster_data,clustersizes_env,by='Cluster_Size',all = TRUE)
-  
-  colnames(merged_cluster_data)<-c('Cluster_Size','Vagina','Nasal','Airways','Skin','Oral','Gut','Pan-microbiome','Animal','Environmental')
-  
-  merged_cluster_data[is.na(merged_cluster_data)]<-0
-  
-  merged_cluster_data=melt(merged_cluster_data,'Cluster_Size')
-
-  ggplot(data=merged_cluster_data,aes(x=log(1+Cluster_Size),y=log(1+value),fill=variable))+ geom_density(stat='identity',alpha=0.2)+theme(legend.position="bottom")+theme(legend.title=element_blank()) +xlab("ln(Genes in Cluster)")+ylab('ln(Frequency)') + labs(title=paste('Distribution of Amino Acid Gene Cluster Sizes, ',pid,' ID',sep=''))
-  
-  ggsave(paste('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/cluster_sizes/combined_clusters_',gsub('%','',pid),'.pdf',sep=''),width=9,height=6,units='in')
-  
-}
-
-generate_cluster_plots('90%')
-generate_cluster_plots('70%')
-generate_cluster_plots('50%')
-generate_cluster_plots('30%')
-generate_cluster_plots('10%')
-
-```
-
-```{r}
-#iterative clustering plots
-
-setwd('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/')
-
-load_data <-function(path_to_file,body_site){
-  d1=read.csv(path_to_file,row.names=1,sep='\t')
-  colnames(d1)=c('100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')
-  d1=t(d1)
-  d1 = as.data.frame(d1) 
-  d1$perc_id=rownames(d1)
-  d1 = d1%>% mutate(Singletons=`1`,'Non-Singletons'=rowSums(d1 %>% select(-`1`,-perc_id))) %>% select(perc_id,Singletons,'Non-Singletons') %>% mutate(ratio=Singletons/`Non-Singletons`)
-  d1$perc_id <- factor(d1$perc_id, levels = (c('100%','95%',"90%","85%","80%","75%","70%","65%","60%",'55%','50%','45%','40%','35%','30%','25%','20%','15%','10%')))
-  d1$body_site=rep(body_site,nrow(d1))
-  return(d1 %>% select(perc_id,ratio,body_site))
-}
-
-d1 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_vagina','Vagina')
-d2 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_nasal','Nasal')
-d3 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_gut','Gut')
-d4 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_oral','Oral')
-d5 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_Skin','Skin')
-d6 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_airways','Airways')
-d7 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_airways','Environmental')
-d8 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_airways','Animal')
-
-d<-rbind(d1,d2,d3,d4,d5,d6,d7,d8)
-
-ggplot(data=d,aes(x=perc_id,colour=body_site,group=body_site)) + geom_line(aes(y=ratio))+scale_colour_brewer(palette="Set1")+xlab('Percent Identity') +ylab('Ratio of Singletons to Non-Singletons') + labs(title='Iterative Amino Acid Gene Catalog Construction by Body Site')+labs(fill='Genes per cluster')+theme(legend.position="bottom")+theme(legend.title=element_blank())
-
-ggsave(file = '~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_clustering_by_body_site.pdf', dpi = 600, width = 9, height = 6, units = "in")
-
-d7 <- load_data('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_cluster_sizes_pan','NONE')
-
-ggplot(data=d7,aes(x=perc_id,y=ratio,colour=body_site,group=body_site)) + geom_line() +xlab('Percent Identity') +ylab('Ratio of Singletons to Non-Singletons') + labs(title='Iterative Amino Acid Gene Catalog Construction')+labs(fill='Genes per cluster')+theme(legend.position = "none")
-
-ggsave(file = '~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_clustering_combined.pdf', dpi = 600, width = 9, height = 6, units = "in")
-
-d8=d %>% group_by(perc_id) %>% summarise(ratio=mean(ratio)) %>% mutate(body_site='NONE')
-
-ggplot(data=d8,aes(x=perc_id,y=ratio,colour=body_site,group=body_site)) + geom_line() +xlab('Percent Identity') +ylab('Ratio of Singletons to Non-Singletons') + labs(title='Iterative Amino Acid Gene Catalog Construction')+labs(fill='Genes per cluster')+theme(legend.position = "none")+scale_color_manual(values=c("black"))
-
-ggsave(file = '~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/iterative_clustering/iterative_clustering_averaged.pdf', dpi = 600, width = 9, height = 6, units = "in")
-
-
-```
-
-
-```{r}
 #overlap analysis subsampled
 setwd('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/overlap_analysis/')
 
@@ -207,7 +87,7 @@ total_overlaps_nonshuffled = total_overlaps
 ```
 
 ```{r}
-#overlap analysis subsampled
+#overlap analysis subsampled randomized
 setwd('~/Dropbox (HMS)/RagGroup Team Folder/Braden Tierney/orfleton_v2/overlap_analysis/')
 
 data=read.csv('subsampled_overlap_analysis_shuffled.tsv',sep='\t',row.names=1)

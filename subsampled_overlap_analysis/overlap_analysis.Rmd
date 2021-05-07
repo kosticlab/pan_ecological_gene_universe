@@ -1,0 +1,194 @@
+---
+title: "orfleton_v2_figures"
+author: "Braden Tierney"
+date: "2/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+#packages
+library(ggplot2)
+library(cowplot)
+library(tidyverse)
+library(gridExtra)
+library(ggpubr)
+library(ComplexHeatmap)
+library(circlize)
+library(mosaic)
+library(taxonomizr)
+library(pheatmap)
+library(gespeR)
+library(matrixStats)
+library(igraph)
+library(ggplot2)
+library(reshape2)
+library(RColorBrewer)
+
+theme_set(theme_cowplot())
+```
+
+
+```{r}
+#overlap analysis subsampled
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/overlap_analysis/')
+
+data=read.csv('subsampled_overlap_analysis.tsv',sep='\t',row.names=1)
+
+data_summarized=data.frame(list(body_sites=rownames(data),mean=unname(rowSums(na.rm=TRUE,data)/10),sd=rowSds(na.rm=TRUE,as.matrix(data))))
+data_summarized=data_summarized %>% mutate(count=str_count(body_sites,'-'))%>% arrange(count,body_sites) %>% filter(body_sites!='')
+data_summarized$body_sites=factor(data_summarized$body_sites,levels=data_summarized$body_sites)
+data_summarized$body_sites = gsub('-','____',data_summarized$body_sites)
+data_summarized$body_sites = paste('__',data_summarized$body_sites,'__',sep='')
+
+body_sites= data_summarized %>% filter(count==0) %>% select(body_sites) %>% unname %>% unlist
+total_overlaps=list()
+beta_diversity = list()
+unique_genes = list()
+for(b in body_sites){
+  for(bb in body_sites){
+    if(b==bb){
+      data_summarized_sub=data_summarized %>% filter(grepl(b,body_sites))
+      total_overlaps[[str_sub(paste(b,bb,sep=''), end=-3,start = 3)]]=round(sum(data_summarized_sub$mean,na.rm=TRUE))
+      data_summarized_sub = data_summarized %>% filter(grepl(b,body_sites), grepl(bb,body_sites)) %>% filter(count==0)
+      unique_genes[[b]] = c(b,sum(data_summarized_sub$mean))
+      data_summarized_sub=data_summarized %>% filter(grepl(b,body_sites), grepl(bb,body_sites)) %>% filter(count!=0)
+      beta_diversity[[b]] = c(b,sum(data_summarized_sub$mean),sd(data_summarized_sub$mean))
+    }
+    else{
+      data_summarized_sub=data_summarized %>% filter(grepl(b,body_sites), grepl(bb,body_sites))
+      total_overlaps[[str_sub(paste(b,bb,sep=''), end=-3,start = 3)]]=round(sum(data_summarized_sub$mean,na.rm=TRUE))
+    }
+  }
+}
+
+total_overlaps=as.data.frame(cbind(total_overlaps)) %>% rownames_to_column() %>% separate(rowname,sep='____',c('Site1','Site2')) 
+
+total_overlaps$total_overlaps=unlist(unname(total_overlaps$total_overlaps))
+total_overlaps_wide = spread(total_overlaps,Site1,total_overlaps)  %>% column_to_rownames('Site2')
+total_overlaps_wide[upper.tri(total_overlaps_wide)]<- t(total_overlaps_wide)[upper.tri(total_overlaps_wide)]
+total_overlaps_wide[is.na(total_overlaps_wide)]=0
+
+ph = pheatmap::pheatmap(as.matrix(log(total_overlaps_wide+1,10)),cluster_columns = TRUE,cluster_rows = TRUE)
+
+d2=bind_rows(beta_diversity) %>% t %>% data.frame %>% tibble
+colnames(d2) = c('body_sites','sum','sd')
+d2$body_sites=gsub('_','',d2$body_sites)
+d2$sum = as.numeric(d2$sum)
+d2$sd = as.numeric(d2$sd)
+d2$body_sites = factor(d2$body_sites,levels = rev(ph$tree_row$labels[ph$tree_row$order]))
+
+d3=bind_rows(unique_genes) %>% t %>% data.frame %>% tibble
+colnames(d3) = c('body_sites','sum')
+d3$body_sites=gsub('_','',d3$body_sites)
+d3$sum = as.numeric(d3$sum)
+d3$body_sites = factor(d3$body_sites,levels = rev(ph$tree_row$labels[ph$tree_row$order]))
+
+p=ggplot(data=d2,aes(x=body_sites,y=round(sum)))+geom_bar(stat='identity') + ylab('gene count')+xlab('Body Site(s)')+ theme(axis.text.x = element_text(angle = 90,hjust=1,size=6))+ggtitle(paste('Total overlapping sequences, ','30','% identity',sep=''))+coord_flip()+ theme(plot.title = element_text(size=9))+theme(legend.position = "bottom")+geom_text(aes(label=round(sum)), position=position_dodge(width=0.9), hjust=0)
+
+#+geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))#+geom_text(size = 2, position = position_stack(vjust = 1.1))
+
+ggsave(file = paste('subsampled_30_overlap.pdf',sep=''), dpi = 600, width = 8, height = 8, units = "in")
+
+p=ggplot(data=d3,aes(x=body_sites,y=sum))+geom_bar(stat='identity') + ylab('gene count')+xlab('Body Site(s)')+ theme(axis.text.x = element_text(angle = 90,hjust=1,size=6))+ggtitle(paste('Total overlapping sequences, ','30','% identity',sep=''))+coord_flip()+ theme(plot.title = element_text(size=9))+theme(legend.position = "bottom")+theme(legend.position = "bottom")+geom_text(aes(label=round(sum)), position=position_dodge(width=0.9), hjust=0)#+geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))#+geom_text(size = 2, position = position_stack(vjust = 1.1))
+ggsave(file = paste('subsampled_30_unique.pdf',sep=''), dpi = 600, width = 8, height = 8, units = "in")
+
+
+pdf('similarity_heatmap.pdf',width=8,height=8)
+ph
+dev.off()
+
+total_overlaps_nonshuffled = total_overlaps
+```
+
+```{r}
+#overlap analysis subsampled randomized
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/overlap_analysis/')
+
+data=read.csv('subsampled_overlap_analysis_shuffled.tsv',sep='\t',row.names=1)
+
+data_summarized=data.frame(list(body_sites=rownames(data),mean=unname(rowSums(na.rm=TRUE,data)/10),sd=rowSds(na.rm=TRUE,as.matrix(data))))
+data_summarized=data_summarized %>% mutate(count=str_count(body_sites,'-'))%>% arrange(count,body_sites) %>% filter(body_sites!='')
+data_summarized$body_sites=factor(data_summarized$body_sites,levels=data_summarized$body_sites)
+data_summarized$body_sites = gsub('-','____',data_summarized$body_sites)
+data_summarized$body_sites = paste('__',data_summarized$body_sites,'__',sep='')
+
+body_sites= data_summarized %>% filter(count==0) %>% select(body_sites) %>% unname %>% unlist
+total_overlaps=list()
+beta_diversity = list()
+unique_genes = list()
+for(b in body_sites){
+  for(bb in body_sites){
+    if(b==bb){
+      data_summarized_sub=data_summarized %>% filter(grepl(b,body_sites))
+      total_overlaps[[str_sub(paste(b,bb,sep=''), end=-3,start = 3)]]=round(sum(data_summarized_sub$mean,na.rm=TRUE))
+      data_summarized_sub = data_summarized %>% filter(grepl(b,body_sites), grepl(bb,body_sites)) %>% filter(count==0)
+      unique_genes[[b]] = c(b,sum(data_summarized_sub$mean))
+      data_summarized_sub=data_summarized %>% filter(grepl(b,body_sites), grepl(bb,body_sites)) %>% filter(count!=0)
+      beta_diversity[[b]] = c(b,sum(data_summarized_sub$mean),sd(data_summarized_sub$mean))
+    }
+    else{
+      data_summarized_sub=data_summarized %>% filter(grepl(b,body_sites), grepl(bb,body_sites))
+      total_overlaps[[str_sub(paste(b,bb,sep=''), end=-3,start = 3)]]=round(sum(data_summarized_sub$mean,na.rm=TRUE))
+    }
+  }
+}
+
+total_overlaps=as.data.frame(cbind(total_overlaps)) %>% rownames_to_column() %>% separate(rowname,sep='____',c('Site1','Site2')) 
+
+total_overlaps$total_overlaps=unlist(unname(total_overlaps$total_overlaps))
+total_overlaps_wide = spread(total_overlaps,Site1,total_overlaps)  %>% column_to_rownames('Site2')
+total_overlaps_wide[upper.tri(total_overlaps_wide)]<- t(total_overlaps_wide)[upper.tri(total_overlaps_wide)]
+total_overlaps_wide[is.na(total_overlaps_wide)]=0
+
+ph = pheatmap::pheatmap(as.matrix(log(total_overlaps_wide+1,10)),cluster_columns = TRUE,cluster_rows = TRUE)
+
+d2=bind_rows(beta_diversity) %>% t %>% data.frame %>% tibble
+colnames(d2) = c('body_sites','sum','sd')
+d2$body_sites=gsub('_','',d2$body_sites)
+d2$sum = as.numeric(d2$sum)
+d2$sd = as.numeric(d2$sd)
+d2$body_sites = factor(d2$body_sites,levels = rev(ph$tree_row$labels[ph$tree_row$order]))
+
+d3=bind_rows(unique_genes) %>% t %>% data.frame %>% tibble
+colnames(d3) = c('body_sites','sum')
+d3$body_sites=gsub('_','',d3$body_sites)
+d3$sum = as.numeric(d3$sum)
+d3$body_sites = factor(d3$body_sites,levels = rev(ph$tree_row$labels[ph$tree_row$order]))
+
+p=ggplot(data=d2,aes(x=body_sites,y=round(sum)))+geom_bar(stat='identity') + ylab('gene count')+xlab('Body Site(s)')+ theme(axis.text.x = element_text(angle = 90,hjust=1,size=6))+ggtitle(paste('Total overlapping sequences, ','30','% identity',sep=''))+coord_flip()+ theme(plot.title = element_text(size=9))+theme(legend.position = "bottom")+geom_text(aes(label=round(sum)), position=position_dodge(width=0.9), hjust=0)
+
+#+geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))#+geom_text(size = 2, position = position_stack(vjust = 1.1))
+
+ggsave(file = paste('subsampled_30_overlap_shuffled.pdf',sep=''), dpi = 600, width = 8, height = 8, units = "in")
+
+p=ggplot(data=d3,aes(x=body_sites,y=sum))+geom_bar(stat='identity') + ylab('gene count')+xlab('Body Site(s)')+ theme(axis.text.x = element_text(angle = 90,hjust=1,size=6))+ggtitle(paste('Total overlapping sequences, ','30','% identity',sep=''))+coord_flip()+ theme(plot.title = element_text(size=9))+theme(legend.position = "bottom")+theme(legend.position = "bottom")+geom_text(aes(label=round(sum)), position=position_dodge(width=0.9), hjust=0)#+geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))#+geom_text(size = 2, position = position_stack(vjust = 1.1))
+ggsave(file = paste('subsampled_30_unique_shuffled.pdf',sep=''), dpi = 600, width = 8, height = 8, units = "in")
+
+
+pdf('similarity_heatmap_shuffled.pdf',width=8,height=8)
+ph
+dev.off()
+
+total_overlaps_shuffled = total_overlaps
+
+```
+
+```{r}
+#compare ranking between sites
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/overlap_analysis/')
+
+merged_overlaps = inner_join(total_overlaps_shuffled,total_overlaps_nonshuffled,by=c('Site1','Site2'))
+
+cor.test(merged_overlaps$total_overlaps.x,merged_overlaps$total_overlaps.y)
+
+ggplot(data = merged_overlaps,aes(x=log(total_overlaps.x),log(total_overlaps.y))) + geom_point()
+
+ggsave(file = paste('total_overlaps_correlation.pdf',sep=''), dpi = 600, width = 8, height = 8, units = "in")
+
+```
