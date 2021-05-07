@@ -1,0 +1,77 @@
+---
+title: "plot_high_conserved_geneabundance_each_ecology"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset")
+```
+
+## Make abundance boxplot of globally conserved genes for each ecology
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(cowplot)
+library(data.table)
+library(ggpubr)
+library(rstatix)
+library(ggtext)
+library(scales)
+
+database = "GLOBAL-CONSERVATIVE_CONGENES_SEQS"
+
+# load in data
+sample_categories = read.table("sample_to_categories_conserved_genes.txt",sep="\t",header=T)
+congenes_raw_mat = read.table("GLOBAL-CONSERVATIVE_CONGENES_SEQS_abundance_mat_normalized.txt",sep="\t",header=T,row.names = 1)
+colnames(congenes_raw_mat) = sapply(strsplit(colnames(congenes_raw_mat),split="[.]"), function(x) x[1])
+congenes_raw_mat = as.matrix(congenes_raw_mat)
+
+congenes_raw_mat_melt = reshape2::melt(congenes_raw_mat)
+# add category
+congenes_raw_mat_melt$category = sample_categories[match(congenes_raw_mat_melt$Var2,sample_categories$sample_type),"category"]
+# get values divided by gene length and log10 scaled
+congenes_raw_mat_melt$value = as.numeric(congenes_raw_mat_melt$value)
+# normalize by length
+congenes_raw_mat_melt$value_norm_pseudo = congenes_raw_mat_melt$value+1
+congenes_raw_mat_melt$log_value_norm = log10(congenes_raw_mat_melt$value_norm_pseudo)
+
+congenes_raw_mat_melt_boxplot_stats = congenes_raw_mat_melt %>% group_by(Var2) %>%  summarise(boxplot= list( setNames(boxplot.stats(value_norm_pseudo)$stats,c('lower_whisker','lower_hinge','median','upper_hinge','upper_whisker') ) ) ) %>% unnest_wider(boxplot)
+congenes_raw_mat_melt_boxplot_stats$category = sample_categories[match(congenes_raw_mat_melt_boxplot_stats$Var2,sample_categories[,1]),2]
+
+# order plot by category
+sample_order =  congenes_raw_mat_melt_boxplot_stats$Var2[order(congenes_raw_mat_melt_boxplot_stats$category)]
+sample_order = as.character(sample_order)
+congenes_raw_mat_melt$Var2 = factor(congenes_raw_mat_melt$Var2,levels = sample_order)
+
+library(RColorBrewer)
+#myCols = viridis(n=length(unique(sample_categories$category)))
+myCols = brewer.pal(n=length(unique(congenes_raw_mat_melt_boxplot_stats$category)), name="Dark2")
+names(myCols) = unique(congenes_raw_mat_melt_boxplot_stats$category)
+myCols_ordered = myCols[match(congenes_raw_mat_melt_boxplot_stats$category[order(congenes_raw_mat_melt_boxplot_stats$category)],names(myCols))]
+
+
+scaleFUN <- function(x) sprintf("%.2f", x)
+pdf(paste("../figure4_highly_conserved_genes/figures/",database,"_category_ordered_with_points_log10scaled_text_colored.pdf",sep=""),width=18)
+ggplot(congenes_raw_mat_melt, aes(x=Var2,y=value_norm_pseudo)) + geom_boxplot(aes(fill=category)) +  theme(axis.text.x = element_text(angle = 75,vjust=0.5,size = 15),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecology",y="Relative abundance") + geom_jitter(shape=16, position=position_jitter(0.2),size=0.2,alpha=0.5) + scale_y_continuous(trans=log10_trans(),breaks=trans_breaks("log10",function(x) 10^x),labels=scaleFUN) + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+dev.off()
+
+### create plot with outliers removed
+congenes_raw_mat_melt_boxplot_stats$Var2 <- factor(congenes_raw_mat_melt_boxplot_stats$Var2, levels = congenes_raw_mat_melt_boxplot_stats$Var2[order(congenes_raw_mat_melt_boxplot_stats$category)])
+
+boxplot_no_outliers <- ggplot(congenes_raw_mat_melt_boxplot_stats, aes(x=Var2, lower=lower_hinge, upper=upper_hinge, middle=median, ymin=lower_whisker, ymax=upper_whisker,fill=category)) + geom_boxplot(stat="identity") +  theme(axis.text.x = element_text(angle = 75,vjust=0.5,size = 15),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecology",y="Relative abundance") + scale_y_continuous(trans=log10_trans(),breaks=trans_breaks("log10",function(x) 10^x),labels=scaleFUN) + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+pdf(paste("../figure4_highly_conserved_genes/figures/",database,"_category_ordered_with_points_log10scaled_text_colored_no_outliers.pdf",sep=""),width=18)
+print(boxplot_no_outliers)
+dev.off()
+
+```
+

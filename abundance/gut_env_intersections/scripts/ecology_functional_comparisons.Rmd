@@ -1,0 +1,186 @@
+---
+title: "ecology_functional_comparisons.Rmd"
+author: "Braden T Tierney"
+date: "2/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+
+theme_set(theme_cowplot())
+
+```
+
+
+```{r}
+
+#figure overviewing comparison strategy as 5A
+
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
+
+
+ge = read.csv('GUT_ENV_CONGENES_SEQS_all_annotations.txt',header=T,sep='\t',quote="")
+hgnh = read.csv('HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_all_annotations.txt',header=T,sep='\t',quote="")
+e = read.csv('AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_all_annotations.txt',header=T,sep='\t',quote="")
+ge_sum = nrow(ge)
+hgnh_sum = nrow(hgnh)
+e_sum = nrow(e)
+
+sums = data.frame(list(ge_sum,hgnh_sum,e_sum))
+colnames(sums) = c('human gut and environment','human gut and non-human-gut', 'environment')
+sums = sums %>% t %>% data.frame %>% rownames_to_column('comparison')
+colnames(sums)[2]='total'
+
+ggplot(sums,aes(x=comparison, y=total,fill=comparison)) + geom_bar(stat='identity')+  theme(axis.text.x = element_text(angle = 70,hjust = 1)) + stat_summary(aes(label = total), fun = mean, geom = "text", size = 3,vjust = -1)
+ggsave('total_counts.pdf',width = 8,height = 9)
+
+```
+
+```{r}
+#fraction analysis -- proteins
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
+
+ge_sub = ge %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq))) 
+#ge_sub$`.` = sapply(strsplit(as.character(ge_sub[,1]),split="\\."), function(x) x[length(x)])
+ge_sub$`.` = fct_reorder(ge_sub$`.`,ge_sub$frac)
+ggplot(data = ge_sub %>% head(25),aes(x = `.`, y = frac)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('ge_product.pdf')
+
+hgnh_sub = hgnh %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq))) 
+#hgnh_sub$`.` = sapply(strsplit(as.character(hgnh_sub[,1]),split="\\."), function(x) x[length(x)])
+hgnh_sub$`.` = fct_reorder(hgnh_sub$`.`,hgnh_sub$frac)
+ggplot(data = hgnh_sub  %>% head(25),aes(x = `.`, y = frac)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('hnhg_product.pdf')
+
+e_sub = e %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq))%>% filter(`.` != '', `.` != 'hypothetical protein')%>% mutate(frac = Freq/(sum(Freq))) 
+#e_sub$`.` = sapply(strsplit(as.character(e_sub[,1]),split="\\."), function(x) x[length(x)])
+e_sub$`.` = fct_reorder(e_sub$`.`,e_sub$frac)
+ggplot(data = e_sub %>% head(25),aes(x = `.`, y = frac)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('e_product.pdf')
+
+```
+
+```{r}
+## get number of taxa per protein
+
+ge_top25_func = ge_sub %>% head(25)
+ge_top25_func = as.character(ge_top25_func[,1])
+ge_top25_unique_taxa_num = sapply(ge_top25_func, function(myfunc) unique(ge[myfunc==ge$protein,"phylum"]))
+ge_top25_unique_taxa_num = lapply(ge_top25_unique_taxa_num, function(x) x[!is.na(x)])
+ge_top25_unique_taxa_num = sapply(ge_top25_unique_taxa_num,length)
+ge_top25_unique_taxa_num = data.frame(protein=names(ge_top25_unique_taxa_num),taxa_number=ge_top25_unique_taxa_num)
+ge_top25_unique_taxa_num$protein = factor(ge_top25_unique_taxa_num$protein,levels = rev(ge_top25_unique_taxa_num$protein))
+ggplot(data = ge_top25_unique_taxa_num,aes(x = protein, y = taxa_number)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = taxa_number), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('ge_taxa_per_top_proteins.pdf')
+
+hgnh_top25_func = hgnh_sub  %>% head(25)
+hgnh_top25_func = as.character(hgnh_top25_func[,1])
+hgnh_top25_unique_taxa_num = sapply(hgnh_top25_func, function(myfunc) unique(ge[myfunc==hgnh$protein,"phylum"]))
+hgnh_top25_unique_taxa_num = lapply(hgnh_top25_unique_taxa_num, function(x) x[!is.na(x)])
+hgnh_top25_unique_taxa_num = sapply(hgnh_top25_unique_taxa_num,length)
+hgnh_top25_unique_taxa_num_df = data.frame(protein=names(hgnh_top25_unique_taxa_num),taxa_number=hgnh_top25_unique_taxa_num)
+hgnh_top25_unique_taxa_num_df$protein = factor(hgnh_top25_unique_taxa_num_df$protein,levels = rev(hgnh_top25_unique_taxa_num_df$protein))
+ggplot(data = hgnh_top25_unique_taxa_num_df,aes(x = protein, y = taxa_number)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = taxa_number), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('hgnh_taxa_per_top_proteins.pdf')
+
+e_top25_func = e_sub %>% head(25)
+e_top25_func = as.character(e_top25_func[,1])
+e_top25_unique_taxa_num = sapply(e_top25_func, function(myfunc) unique(ge[myfunc==e$protein,"phylum"]))
+e_top25_unique_taxa_num = lapply(e_top25_unique_taxa_num, function(x) x[!is.na(x)])
+e_top25_unique_taxa_num = sapply(e_top25_unique_taxa_num, length)
+e_top25_unique_taxa_num_df = data.frame(protein=names(e_top25_unique_taxa_num),taxa_number=e_top25_unique_taxa_num)
+e_top25_unique_taxa_num_df$protein = factor(e_top25_unique_taxa_num_df$protein,levels = rev(e_top25_unique_taxa_num_df$protein))
+ggplot(data = e_top25_unique_taxa_num_df,aes(x = protein, y = taxa_number)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = taxa_number), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('e_taxa_per_top_proteins.pdf')
+
+```
+
+
+```{r}
+#fraction analysis -- proteins
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
+
+
+#color according to phylum
+
+phylum_map = bind_rows(ge,hgnh,e) %>% select(phylum,genus) %>% distinct
+
+ge_sub = ge %>% select(genus) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% mutate(frac = Freq/(sum(Freq))) 
+colnames(ge_sub)[1]='genus'
+ge_sub = left_join(ge_sub,phylum_map)
+ge_sub$genus = fct_reorder(ge_sub$genus,ge_sub$frac)
+ggplot(data = ge_sub %>% head(25),aes(x = genus, y = frac, fill = phylum)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('ge_taxa.pdf')
+
+hgnh_sub = hgnh %>% select(genus) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% mutate(frac = Freq/(sum(Freq))) 
+colnames(hgnh_sub)[1]='genus'
+hgnh_sub = left_join(hgnh_sub,phylum_map)
+hgnh_sub$genus = fct_reorder(hgnh_sub$genus,hgnh_sub$frac)
+ggplot(data = hgnh_sub  %>% head(25),aes(x = genus, y = frac, fill = phylum)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('hngh_taxa.pdf')
+
+e_sub = e %>% select(genus) %>% table %>% as.data.frame %>% arrange(desc(Freq))%>% mutate(frac = Freq/(sum(Freq))) 
+colnames(e_sub)[1]='genus'
+e_sub = left_join(e_sub,phylum_map)
+e_sub$genus = fct_reorder(e_sub$genus,e_sub$frac)
+ggplot(data = e_sub %>% head(25),aes(x = genus, y = frac, fill = phylum)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('e_taxa.pdf')
+
+```
+
+
+```{r}
+#hypothetical protein figure
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
+
+ge_sub = ge %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq))  %>% mutate(frac = Freq/(sum(Freq))) %>% filter(`.` != '', `.` == 'hypothetical protein') 
+hgnh_sub = hgnh %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq))  %>% mutate(frac = Freq/(sum(Freq))) %>% filter(`.` != '', `.` == 'hypothetical protein')
+e_sub = e %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq))  %>% mutate(frac = Freq/(sum(Freq))) %>% filter(`.` != '', `.` == 'hypothetical protein')
+
+hyps = bind_rows(ge_sub,hgnh_sub,e_sub) %>% mutate(name = c('human gut and environment','human gut and non-human-gut', 'environment'))
+
+ggplot(data = hyps,aes(x = name, y = frac, fill = name)) + geom_bar(stat='identity')  + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,vjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1))
+ggsave('hyps.pdf',width = 8,height = 9)
+
+```
+
+
+```{r}
+#cog overview figure
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
+
+ge_sub = ge %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(name = 'human gut and environment',frac = Freq/(sum(Freq))) %>% head(5)
+ge_sub$`.` = fct_reorder(ge_sub$`.`,ge_sub$frac)
+
+hgnh_sub = hgnh %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(name = 'human gut and non-human-gut',frac = Freq/(sum(Freq))) %>% head(5)
+hgnh_sub$`.` = fct_reorder(hgnh_sub$`.`,hgnh_sub$frac)
+
+e_sub = e %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq))%>% filter(`.` != '', `.` != 'hypothetical protein')%>% mutate(name = 'environment',frac = Freq/(sum(Freq)))%>% head(5)
+e_sub$`.` = fct_reorder(e_sub$`.`,e_sub$frac)
+
+ggplot(data = ge_sub,aes(x = `.`, y = frac)) + geom_bar(fill = '#04C334',stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2) + coord_flip()
+ggsave('ge_cog_cats.pdf')
+
+ggplot(data = hgnh_sub,aes(x = `.`, y = frac)) + geom_bar(fill = '#00BFC4',stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1))+ ylim(0,.2)+ coord_flip()
+ggsave('hgng_cog_cats.pdf')
+
+ggplot(data = e_sub,aes(x = `.`, y = frac)) + geom_bar(fill = '#F8766D',stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1))+ ylim(0,.2)+ coord_flip()
+ggsave('e_cog_cats.pdf')
+
+```
+
+
+
+
+
+

@@ -1,0 +1,367 @@
+---
+title: "umap_taxa_enrichments.Rmd"
+author: "Braden T Tierney"
+date: "2/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(cowplot)
+library(patchwork)
+theme_set(theme_cowplot())
+
+```
+
+```{r}
+outplots = list()
+```
+
+
+```{r}
+#phyla
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+cluster1 =  read.csv('cluster1_enrichments_taxa/cluster1_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster1$taxa=fct_reorder(cluster1$taxa,abs(cluster1$odds_ratio))
+p1 = ggplot(cluster1,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('')  + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster1.pdf')
+
+cluster2 =  read.csv('cluster2_enrichments_taxa/cluster2_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster2$taxa=fct_reorder(cluster2$taxa,abs(cluster2$odds_ratio))
+p2= ggplot(cluster2,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster2.pdf')
+
+cluster3 =  read.csv('cluster3_enrichments_taxa/cluster3_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster3$taxa=fct_reorder(cluster3$taxa,abs(cluster3$odds_ratio))
+p3= ggplot(cluster3,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster3.pdf')
+
+cluster4 =  read.csv('cluster4_enrichments_taxa/cluster4_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% filter(taxa!='NA.')%>% head(10)
+cluster4$taxa=fct_reorder(cluster4$taxa,abs(cluster4$odds_ratio))
+p4 = ggplot(cluster4,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster4.pdf')
+
+cluster5 =  read.csv('cluster5_enrichments_taxa/cluster5_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster5$taxa=fct_reorder(cluster5$taxa,abs(cluster5$odds_ratio))
+p5 = ggplot(cluster5,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster5.pdf')
+
+cluster6 =  read.csv('cluster6_enrichments_taxa/cluster6_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster6$taxa=fct_reorder(cluster6$taxa,abs(cluster6$odds_ratio))
+p6 = ggplot(cluster6,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster6.pdf')
+
+cluster7 =  read.csv('cluster7_enrichments_taxa/cluster7_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster7$taxa=fct_reorder(cluster7$taxa,abs(cluster7$odds_ratio))
+p7 = ggplot(cluster7,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'phyla_cluster7.pdf')
+
+
+```
+
+```{r}
+#class
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+cluster1 =  read.csv('cluster1_enrichments_taxa/cluster1_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster1$taxa=fct_reorder(cluster1$taxa,abs(cluster1$odds_ratio))
+g1 = ggplot(cluster1,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster1.pdf')
+
+cluster2 =  read.csv('cluster2_enrichments_taxa/cluster2_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster2$taxa=fct_reorder(cluster2$taxa,abs(cluster2$odds_ratio))
+g2 = ggplot(cluster2,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster2.pdf')
+
+cluster3 =  read.csv('cluster3_enrichments_taxa/cluster3_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster3$taxa=fct_reorder(cluster3$taxa,abs(cluster3$odds_ratio))
+g3 = ggplot(cluster3,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster3.pdf')
+
+cluster4 =  read.csv('cluster4_enrichments_taxa/cluster4_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% filter(taxa!='NA.')%>% head(10)
+cluster4$taxa=fct_reorder(cluster4$taxa,abs(cluster4$odds_ratio))
+g4 = ggplot(cluster4,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster4.pdf')
+
+cluster5 =  read.csv('cluster5_enrichments_taxa/cluster5_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster5$taxa=fct_reorder(cluster5$taxa,abs(cluster5$odds_ratio))
+g5 = ggplot(cluster5,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster5.pdf')
+
+cluster6 =  read.csv('cluster6_enrichments_taxa/cluster6_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster6$taxa=fct_reorder(cluster6$taxa,abs(cluster6$odds_ratio))
+g6 = ggplot(cluster6,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster6.pdf')
+
+cluster7 =  read.csv('cluster7_enrichments_taxa/cluster7_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster7$taxa=fct_reorder(cluster7$taxa,abs(cluster7$odds_ratio))
+g7 = ggplot(cluster7,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'class_cluster7.pdf')
+
+```
+
+```{r}
+#genus
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+cluster1 =  read.csv('cluster1_enrichments_taxa/cluster1_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster1$taxa=fct_reorder(cluster1$taxa,abs(cluster1$odds_ratio))
+g1 = ggplot(cluster1,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster1.pdf')
+
+cluster2 =  read.csv('cluster2_enrichments_taxa/cluster2_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster2$taxa=fct_reorder(cluster2$taxa,abs(cluster2$odds_ratio))
+g2 = ggplot(cluster2,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster2.pdf')
+
+cluster3 =  read.csv('cluster3_enrichments_taxa/cluster3_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster3$taxa=fct_reorder(cluster3$taxa,abs(cluster3$odds_ratio))
+g3 = ggplot(cluster3,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster3.pdf')
+
+cluster4 =  read.csv('cluster4_enrichments_taxa/cluster4_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% filter(taxa!='NA.')%>% head(10)
+cluster4$taxa=fct_reorder(cluster4$taxa,abs(cluster4$odds_ratio))
+g4 = ggplot(cluster4,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster4.pdf')
+
+cluster5 =  read.csv('cluster5_enrichments_taxa/cluster5_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster5$taxa=fct_reorder(cluster5$taxa,abs(cluster5$odds_ratio))
+g5 = ggplot(cluster5,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster5.pdf')
+
+cluster6 =  read.csv('cluster6_enrichments_taxa/cluster6_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster6$taxa=fct_reorder(cluster6$taxa,abs(cluster6$odds_ratio))
+g6 = ggplot(cluster6,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster6.pdf')
+
+cluster7 =  read.csv('cluster7_enrichments_taxa/cluster7_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster7$taxa=fct_reorder(cluster7$taxa,abs(cluster7$odds_ratio))
+g7 = ggplot(cluster7,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'genus_cluster7.pdf')
+
+#load phyla mapping
+
+phyla_genus_mapping = read.csv('phyla_genus_mapping',sep='\t',header=F)
+
+
+
+```
+
+```{r}
+#species
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+cluster1 =  read.csv('cluster1_enrichments_taxa/cluster1_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster1$taxa=fct_reorder(cluster1$taxa,abs(cluster1$odds_ratio))
+s1 = ggplot(cluster1,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster1.pdf')
+
+cluster2 =  read.csv('cluster2_enrichments_taxa/cluster2_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster2$taxa=fct_reorder(cluster2$taxa,abs(cluster2$odds_ratio))
+s2 = ggplot(cluster2,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster2.pdf')
+
+cluster3 =  read.csv('cluster3_enrichments_taxa/cluster3_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster3$taxa=fct_reorder(cluster3$taxa,abs(cluster3$odds_ratio))
+s3 = ggplot(cluster3,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster3.pdf')
+
+cluster4 =  read.csv('cluster4_enrichments_taxa/cluster4_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% filter(taxa!='NA.')%>% head(10)
+cluster4$taxa=fct_reorder(cluster4$taxa,abs(cluster4$odds_ratio))
+s4= ggplot(cluster4,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster4.pdf')
+
+cluster5 =  read.csv('cluster5_enrichments_taxa/cluster5_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster5$taxa=fct_reorder(cluster5$taxa,abs(cluster5$odds_ratio))
+s5 = ggplot(cluster5,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster5.pdf')
+
+cluster6 =  read.csv('cluster6_enrichments_taxa/cluster6_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster6$taxa=fct_reorder(cluster6$taxa,abs(cluster6$odds_ratio))
+s6 = ggplot(cluster6,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster6.pdf')
+
+cluster7 =  read.csv('cluster7_enrichments_taxa/cluster7_species_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster7$taxa=fct_reorder(cluster7$taxa,abs(cluster7$odds_ratio))
+s7 = ggplot(cluster7,aes(x=taxa,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-3,8)
+ggsave(width=9,height=9,'species_cluster7.pdf')
+
+```
+
+```{r}
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+pdf('enrichment_plots.pdf',width=16,height=16)
+plot_grid(p1,g1,s1,p2,g2,s2,p3,g3,s3,p4,g4,s4,p5,g5,s5,p6,g6,s6,p7,g7,s7,ncol=3,align = 'v')
+dev.off() 
+
+```
+
+
+```{r}
+#genus with phyla annotation
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+#load phyla mapping
+
+phyla_genus_mapping = read.csv('phyla_genus_mapping',sep='\t',header=F)
+colnames(phyla_genus_mapping) = c('phyla','taxa')
+
+cluster1 =  read.csv('cluster1_enrichments_taxa/cluster1_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster1 = left_join(cluster1,phyla_genus_mapping)
+cluster1$taxa=fct_reorder(cluster1$taxa,abs(cluster1$odds_ratio))
+cluster1$phyla[cluster1$phyla=='Haptista'] = 'Other'
+cluster1$phyla[is.na(cluster1$phyla)] = 'Other'
+
+cluster2 =  read.csv('cluster2_enrichments_taxa/cluster2_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster2 = left_join(cluster2,phyla_genus_mapping)
+cluster2$taxa=fct_reorder(cluster2$taxa,abs(cluster2$odds_ratio))
+
+cluster3 =  read.csv('cluster3_enrichments_taxa/cluster3_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster3 = left_join(cluster3,phyla_genus_mapping)
+cluster3$taxa=fct_reorder(cluster3$taxa,abs(cluster3$odds_ratio))
+
+cluster4 =  read.csv('cluster4_enrichments_taxa/cluster4_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% filter(taxa!='NA.')%>% head(10)
+cluster4 = left_join(cluster4,phyla_genus_mapping)
+cluster4$taxa=fct_reorder(cluster4$taxa,abs(cluster4$odds_ratio))
+
+cluster5 =  read.csv('cluster5_enrichments_taxa/cluster5_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster5 = left_join(cluster5,phyla_genus_mapping)
+cluster5$taxa=fct_reorder(cluster5$taxa,abs(cluster5$odds_ratio))
+cluster5$phyla[is.na(cluster5$phyla)] = 'Other'
+
+cluster6 =  read.csv('cluster6_enrichments_taxa/cluster6_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster6 = left_join(cluster6,phyla_genus_mapping)
+cluster6$taxa=fct_reorder(cluster6$taxa,abs(cluster6$odds_ratio))
+cluster6$phyla[is.na(cluster6$phyla)] = 'Other'
+cluster6$phyla[cluster6$phyla=='Nucleocytoviricota'] = 'Other'
+
+
+cluster7 =  read.csv('cluster7_enrichments_taxa/cluster7_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% filter(taxa!='NA.') %>% head(10)
+cluster7 = left_join(cluster7,phyla_genus_mapping)
+cluster7$taxa=fct_reorder(cluster7$taxa,abs(cluster7$odds_ratio))
+
+
+library(RColorBrewer)
+colmap = bind_rows(cluster1,cluster2,cluster3,cluster4,cluster5,cluster6,cluster7) %>% select(phyla) %>% unique
+
+myColors <- brewer.pal(12,"Set3")
+names(myColors) <- levels(factor(colmap$phyla))
+colScale <- scale_fill_manual(name = "phyla",values = myColors)
+
+g1 = ggplot(cluster1,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster1_phyla_annotated.pdf')
+
+g2 = ggplot(cluster2,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster2_phyla_annotated.pdf')
+
+g3 = ggplot(cluster3,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster3_phyla_annotated.pdf')
+
+g4 = ggplot(cluster4,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster4_phyla_annotated.pdf')
+
+g5 = ggplot(cluster5,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster5_phyla_annotated.pdf')
+
+g6 = ggplot(cluster6,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster6_phyla_annotated.pdf')
+
+g7 = ggplot(cluster7,aes(x=taxa,y=log(odds_ratio), fill = phyla))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') + ylim(-1,8) + colScale+ theme(legend.position = "none")
+ggsave(width=9,height=9,'genus_cluster7_phyla_annotated.pdf')
+
+
+combined <- g1 +g2 +g3 + g4 + g5 + g6 + g7 & theme(legend.position = "bottom")
+
+pdf('enrichment_plots_genus.pdf',width=16,height=8)
+combined + plot_layout()
+dev.off() 
+
+
+```
+
+
+```{r}
+#histograms of odds ratios
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+#genus
+c1g = read.csv('cluster1_enrichments_taxa/cluster1_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c2g = read.csv('cluster2_enrichments_taxa/cluster2_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c3g = read.csv('cluster3_enrichments_taxa/cluster3_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c4g = read.csv('cluster4_enrichments_taxa/cluster4_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c5g = read.csv('cluster5_enrichments_taxa/cluster5_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c6g = read.csv('cluster6_enrichments_taxa/cluster6_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c7g = read.csv('cluster7_enrichments_taxa/cluster7_genus_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+
+
+#class
+c1c = read.csv('cluster1_enrichments_taxa/cluster1_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c2c = read.csv('cluster2_enrichments_taxa/cluster2_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c3c = read.csv('cluster3_enrichments_taxa/cluster3_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c4c = read.csv('cluster4_enrichments_taxa/cluster4_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c5c = read.csv('cluster5_enrichments_taxa/cluster5_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c6c = read.csv('cluster6_enrichments_taxa/cluster6_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c7c = read.csv('cluster7_enrichments_taxa/cluster7_class_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+
+
+#phylum
+c1p = read.csv('cluster1_enrichments_taxa/cluster1_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c2p = read.csv('cluster2_enrichments_taxa/cluster2_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c3p = read.csv('cluster3_enrichments_taxa/cluster3_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c4p = read.csv('cluster4_enrichments_taxa/cluster4_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c5p = read.csv('cluster5_enrichments_taxa/cluster5_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c6p = read.csv('cluster6_enrichments_taxa/cluster6_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c7p = read.csv('cluster7_enrichments_taxa/cluster7_phylum_enrichemnt_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+
+
+g1 = ggplot(c1g, aes(log_odds_ratio)) +geom_histogram() + xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+g2 = ggplot(c2g, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+g3 = ggplot(c3g, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+g4 = ggplot(c4g, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+g5 = ggplot(c5g, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+g6 = ggplot(c6g, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+g7 = ggplot(c7g, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,550)
+
+
+c1 = ggplot(c1c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+c2 = ggplot(c2c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+c3 = ggplot(c3c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+c4 = ggplot(c4c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+c5 = ggplot(c5c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+c6 = ggplot(c6c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+c7 = ggplot(c7c, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+
+p1 = ggplot(c1p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+p2 = ggplot(c2p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+p3 = ggplot(c3p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+p4 = ggplot(c4p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+p5 = ggplot(c5p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+p6 = ggplot(c6p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+p7 = ggplot(c7p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('') + xlim(-10,10) +ylim(0,40)
+
+pdf('odds_ratios_histograms_plots_taxa.pdf',width=16,height=16)
+plot_grid(g1,g2,g3,g4,g5,g6,g7,c1,c2,c3,c4,c5,c6,c7,p1,p2,p3,p4,p5,p6,p7,ncol=7,align = 'v')
+dev.off() 
+
+```
+
+
+
+
+
+
+
+
+

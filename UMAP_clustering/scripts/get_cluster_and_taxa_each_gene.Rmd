@@ -1,0 +1,45 @@
+---
+title: "get_cluster_and_taxa_each_gene"
+author: "Sam Zimmerman"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For the taxonomic ID file add the cluster the sample is from along with the taxaID
+
+```{r}
+library(data.table)
+taxa_data = fread("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",sep="\t",header=T)
+consensus_taxa_ID = fread("/n/scratch3/users/a/adk9/orfleton/ov2_gene_taxa_annotation",sep="\t",header=F)
+clusters_mem_all_samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/umap_dbscan_silhouette_output_50PCs_2components_minclust100_colScaled_cluster_mem.txt",sep="\t",header=T)
+clusters_mem_cluster4samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments//umap_cluster4_louvain_50neighbors_cluster_mem.txt",sep="\t",header=T)
+clusters_mem_cluster5samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster5_louvain_10PCs_50neighbors_cluster_member.txt",sep="\t",header=T)
+## add subclusters 
+# add subclusters of cluster 4
+clusters_mem_cluster4samples_ordered = clusters_mem_cluster4samples[match(clusters_mem_all_samples$sample,clusters_mem_cluster4samples$sample),]
+clusters_mem_cluster4samples_ordered$cluster[is.na(clusters_mem_cluster4samples_ordered$cluster)] = 0
+clusters_mem_all_samples$cluster = paste(clusters_mem_all_samples$cluster,clusters_mem_cluster4samples_ordered$cluster,sep=".")
+clusters_mem_all_samples$cluster = gsub(".0","",clusters_mem_all_samples$cluster,fixed=T)
+# add subclusters of cluster 5
+clusters_mem_cluster5samples_ordered = clusters_mem_cluster5samples[match(clusters_mem_all_samples$sample,clusters_mem_cluster5samples$sample),]
+clusters_mem_cluster5samples_ordered$cluster[is.na(clusters_mem_cluster5samples_ordered$cluster)] = 0
+clusters_mem_all_samples$cluster = paste(clusters_mem_all_samples$cluster,clusters_mem_cluster5samples_ordered$cluster,sep=".")
+clusters_mem_all_samples$cluster = gsub(".0","",clusters_mem_all_samples$cluster,fixed=T)
+# first order cluster ID by sample in taxa_data
+clusters_mem_all_samples_ordered = clusters_mem_all_samples[match(taxa_data$sample,clusters_mem_all_samples$sample),]
+
+# now get the taxa ID
+sample_no_ecology = tstrsplit(consensus_taxa_ID$V1,split="_",keep=c(2,3),fixed=T)
+sample_no_ecology2 = paste(sample_no_ecology[[1]],sample_no_ecology[[2]],sep="_")
+consensus_taxa_ID[,V4:=sample_no_ecology2]
+all.equal(consensus_taxa_ID$V4,taxa_data$geneName) #TRUE
+# now add taxa ID
+taxa_data[,taxaID:=consensus_taxa_ID$V2]
+# now add cluster number
+taxa_data[,cluster:= clusters_mem_all_samples_ordered$cluster]
+write.table(taxa_data,file="/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa_with_clusterID_taxID.txt",sep="\t",quote=F,col.names=T,row.names=F)
+```

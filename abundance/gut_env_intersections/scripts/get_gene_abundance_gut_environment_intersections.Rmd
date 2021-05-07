@@ -1,0 +1,396 @@
+---
+title: "get_gene_abundance_gut_environment_intersections"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First extract the genes prevalent in guts and in gut and environmental ecologies
+
+```{bash}
+
+# first get the gene names
+cat multi_map_30_overlaps.tsv | grep -E 'GUT|MOOSE|MOUSE|COW|CHICKEN' | grep -E 'GLACIER-OR-PERMAFROST|TERRESTRIAL-SOIL|AQUATIC|AQUATIC-SEDIMENT'| grep -vE 'PLANTS|RHIZOSPHERE|CORAL-REEF|AIRWAYS|ORAL|SKIN|VAGINAL|NASAL' > GUT_ENV_CONGENES
+##
+cat multi_map_30_overlaps.tsv | grep 'GUT' | grep -E 'COW|MOOSE|MOUSE|CHICKEN' |grep -vE 'GLACIER-OR-PERMAFROST|TERRESTRIAL-SOIL|AQUATIC|AQUATIC-SEDIMENT|PLANTS|RHIZOSPHERE|CORAL-REEF|AIRWAYS|ORAL|SKIN|VAGINAL|NASAL' > HUMAN-GUT_NON-HUMAN-GUT_CONGENES
+
+### Next extract the actual sequences
+
+# first in gut and environment
+source activate /home/sez10/miniconda3/envs/meta_assemblers
+awk '{print $1}' /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES_names
+seqtk subseq /n/scratch3/users/b/btt5/orfletonv2/pan_genes /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES_names > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES_SEQS 
+
+# next do so in gut-nhg
+
+awk '{print $1}' /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_names
+seqtk subseq /n/scratch3/users/b/btt5/orfletonv2/pan_genes /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_names > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2 
+
+# next make diamond databases 
+diamond makedb --in GUT_ENV_CONGENES_SEQS -d GUT_ENV_CONGENES_SEQS_db
+diamond makedb --in HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2 -d HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_db
+
+# run alignments
+
+sbatch -c 1 -p short --mem=20G -t 0-02:00 --array=1-422%50 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/align_OV2_intersections_batch.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/fig3_4_input_all_IDs.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/tmp 4 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_db.dmnd /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2
+
+#### now do the same process for gene prevalent in aquatic and terrestrial environments
+cat multi_map_30_overlaps.tsv | grep -E 'AQUATIC|AQUATIC-SEDIMENT' | grep -E 'GLACIER-OR-PERMAFROST|TERRESTRIAL-SOIL' | grep -vE 'PLANTS|RHIZOSPHERE|CORAL-REEF|AIRWAYS|ORAL|SKIN|VAGINAL|NASAL|GUT|MOOSE|MOUSE|COW|CHICKEN' > AQUATIC_TERRESTRIAL_CONGENES_V2
+
+## extract genes
+
+source activate /home/sez10/miniconda3/envs/meta_assemblers
+awk '{print $1}' /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2 > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2_names
+seqtk subseq /n/scratch3/users/b/btt5/orfletonv2/pan_genes /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2_names > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS 
+# make diamond database
+diamond makedb --in AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS -d AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_db
+## run alignments
+sbatch -c 1 -p short --mem=20G -t 0-02:00 --array=1-422%50 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/align_OV2_intersections_batch.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/fig3_4_input_all_IDs.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/tmp 4 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_db.dmnd /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS # job ID is 28077373
+```
+
+Now Compute differential abundance between
+
+```{bash}
+sbatch -c 1 -p short --mem=50G -t 0-10:00 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/code_all_pvals/get_all_pvals.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output GUT_ENV_CONGENES_SEQS aquatic,aquatic_sediment,chicken_ceceum,cow,glacier_permafrost,human_gut,mice,moose,soil /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GUT_ENV_CONGENES /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons
+
+### now do mammalian gut genes
+sbatch -c 1 -p short --mem=50G -t 0-10:00 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/code_all_pvals/get_all_pvals.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2 chicken_ceceum,cow,human_gut,mice,moose /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-GUT_NON-HUMAN-GUT_CONGENES /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons
+## now do environment only
+sbatch -c 1 -p short --mem=50G -t 0-10:00 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/code_all_pvals/get_all_pvals.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS aquatic,aquatic_sediment,glacier_permafrost,soil /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/AQUATIC_TERRESTRIAL_CONGENES_V2 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons
+```
+
+Now convert p-values computed above to FDR and output a binary matrix for each of the 3 comparisons where each row is a gene and column is an ecology. If value is 1 than gene is significantly abundant in an ecology.
+
+```{r}
+library(data.table)
+
+get_sig_genes = function(input_file,database,target_ecologies) {
+  target_ecologies = strsplit(target_ecologies,split=",")[[1]]
+  myDT = fread(input_file,header=T,sep="\t")
+  # remove moose columns for now
+  moose_col_names = colnames(myDT)[grep("moose",colnames(myDT))]
+  myDT[,(moose_col_names):=NULL]
+  # get pval column
+  pval_cols = myDT[,grep("pval_",colnames(myDT)),with=FALSE]
+  fdr_columns = pval_cols[, lapply(.SD, function(x) p.adjust(x,method="BY"))]
+  colnames(fdr_columns) = gsub("pval_","fdr_",colnames(fdr_columns))
+  all_genes_DF = cbind(myDT,fdr_columns)
+  ## get the significant genes in each category
+  sig_genes_each_ecology=lapply(target_ecologies, function(myecology) {
+  # first get all pvalue columns
+  cols_prefix_to_search  = paste("fdr_",myecology,"_vs_",sep="")
+  # get fdr columns
+  fdr_cols_temp = all_genes_DF[,grep(cols_prefix_to_search,colnames(all_genes_DF)),with=FALSE]
+  # # get the sig genes
+  sig_indexes = which(rowSums(fdr_cols_temp<0.05)==ncol(fdr_cols_temp))
+  sig_genes = all_genes_DF[sig_indexes,]
+  sig_gene_names = sig_genes$geneName
+  return(sig_gene_names)
+})
+names(sig_genes_each_ecology) = target_ecologies
+all_sig_gene_names = unique(unlist(sig_genes_each_ecology))
+binary_mat = sapply(sig_genes_each_ecology,function(x) as.numeric(all_sig_gene_names%in%x))
+rownames(binary_mat) = all_sig_gene_names
+binary_mat = as.data.frame(binary_mat)
+
+if(database == "GUT_ENV_CONGENES_SEQS") {
+  binary_mat = binary_mat[(binary_mat$aquatic == 1 | binary_mat$aquatic_sediment == 1 | binary_mat$glacier_permafrost | binary_mat$soil) & (binary_mat$chicken_ceceum == 1 | binary_mat$cow == 1 | binary_mat$human_gut == 1 | binary_mat$mice == 1),]
+} else if(database == "HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2") {
+    binary_mat = binary_mat[(binary_mat$human_gut == 1 ) & (binary_mat$chicken_ceceum == 1 | binary_mat$cow == 1 | binary_mat$mice == 1),]
+} else if(database == "AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS") {
+  binary_mat = binary_mat[(binary_mat$glacier_permafrost == 1 | binary_mat$soil) & (binary_mat$aquatic_sediment == 1 | binary_mat$aquatic),]
+}
+  binary_mat_with_gene_names = cbind(geneNames=rownames(binary_mat),binary_mat)
+  write.table(binary_mat_with_gene_names,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/",database,"_sigGenes_intersections_binary_mat.txt",sep=""),quote=F,sep="\t",col.names=T,row.names=F)
+return(binary_mat)
+}
+# gut-env
+bin_mat_gut_env = get_sig_genes(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/GUT_ENV_CONGENES_SEQS_pvals.txt",database="GUT_ENV_CONGENES_SEQS",target_ecologies="aquatic,aquatic_sediment,chicken_ceceum,cow,glacier_permafrost,human_gut,mice,soil")
+#Gut-NHG
+bin_mat_gut_nhg = get_sig_genes(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_pvals.txt",database="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2",target_ecologies="chicken_ceceum,cow,human_gut,mice")
+# aquatic terrestrial
+bin_mat_aquatic_terrestrial = get_sig_genes(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_pvals.txt",database="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS",target_ecologies="aquatic,aquatic_sediment,glacier_permafrost,soil")
+```
+
+Next Get the functional and taxonmic annotations for each of the 3 intersections I do
+
+```{r}
+library(data.table)
+#load annotation data
+consensus_seq_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt | grep -v 'ftype'"),header=F)
+cog_funcs = fread("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/cog-20.def.tab",header=FALSE,data.table = F)
+cog_category = read.table("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/fun-20.tab",header=F,sep="\t")
+EC_desc = read.table("/n/data1/joslin/icrb/kostic/szimmerman/all_EC_to_desc.txt",sep="\t",quote="")
+# load in taxonomy annotations 
+taxa_data = fread("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",sep="\t",header=T)
+consensus_taxa_ID = fread("/n/scratch3/users/a/adk9/orfleton/ov2_gene_taxa_annotation",sep="\t",header=F)
+
+get_sig_intersection_annotations = function(input_file,database) {
+binary_mat = read.table(input_file,sep="\t",header=T,row.names = 1)
+# get the different combos of intersections 
+binary_mat_cols = colnames(binary_mat)
+pres_ecologies_sig_genes = apply(binary_mat, 1,function(x) {
+  egologies = binary_mat_cols[which(x==1)]
+  egologies = paste(egologies,collapse="__")
+  return(egologies)
+})
+## now lets annotate the genes
+pres_ecologies_sig_genes_DF = data.frame(geneName=names(pres_ecologies_sig_genes),category=pres_ecologies_sig_genes)
+sig_gene_names_split = tstrsplit(pres_ecologies_sig_genes_DF$geneName,split="_",keep=c(2,3))
+sig_gene_names_no_eco = paste(sig_gene_names_split[[1]],sig_gene_names_split[[2]],sep="_")
+pres_ecologies_sig_genes_DF = cbind(geneName_no_eco=sig_gene_names_no_eco,pres_ecologies_sig_genes_DF)
+consensus_seq_annotations_ordered = consensus_seq_annotations[match(pres_ecologies_sig_genes_DF$geneName_no_eco,consensus_seq_annotations$V1)]
+sig_COGs = consensus_seq_annotations_ordered$V6
+sig_geneID=consensus_seq_annotations_ordered$V4
+sig_ECid=consensus_seq_annotations_ordered$V5
+sig_protein=consensus_seq_annotations_ordered$V7
+## get descriptions for the COG
+cog_funcs_sorted = cog_funcs[match(sig_COGs,cog_funcs$V1),]
+COG_name = cog_funcs_sorted$V3
+COG_gene_name = cog_funcs_sorted$V4
+COG_functional_pathway = cog_funcs_sorted$V5
+COG_functional_category = cog_funcs_sorted$V2
+cog_cat_description_vec = sapply(strsplit(COG_functional_category,split=""),function(x) paste(cog_category[match(x,cog_category[,1]),3],collapse="/"))
+### NOW GET EC NUMBER ANNOTATIONS
+EC_split_temp = strsplit(sig_ECid,split="[.]")
+EC_description = sapply(EC_split_temp, function(x) {
+  original_EC = paste(x,collapse=".")
+  specific_desc = EC_desc[match(original_EC,EC_desc$V1),2]
+  number_dashes_temp = sum(x=="-")
+  if(number_dashes_temp == 0 & !is.na(specific_desc)) {
+    x[4] = "-"
+    x_adjusted = paste(x,collapse=".")
+    general_EC = EC_desc[match(x_adjusted,EC_desc$V1),2]
+    specific_desc = paste(general_EC,specific_desc)
+  }
+  return(specific_desc)
+})
+taxa_data_ordered = taxa_data[match(pres_ecologies_sig_genes_DF$geneName_no_eco,taxa_data$geneName)]
+consensus_taxa_ID_ordered = consensus_taxa_ID[match(pres_ecologies_sig_genes_DF$geneName,consensus_taxa_ID$V1)]
+#### OK I think I have all the metadata I want. Now time to put together
+pres_ecologies_sig_genes_DF$geneID=sig_geneID
+pres_ecologies_sig_genes_DF$protein=sig_protein
+pres_ecologies_sig_genes_DF$COG=sig_COGs
+pres_ecologies_sig_genes_DF$COG_name = COG_name
+pres_ecologies_sig_genes_DF$COG_gene_name = COG_gene_name
+pres_ecologies_sig_genes_DF$COG_functional_pathway = COG_functional_pathway
+pres_ecologies_sig_genes_DF$COG_functional_category = COG_functional_category
+pres_ecologies_sig_genes_DF$cog_cat_description = cog_cat_description_vec
+pres_ecologies_sig_genes_DF$ECid = sig_ECid
+pres_ecologies_sig_genes_DF$EC_description = EC_description
+pres_ecologies_sig_genes_DF = cbind(pres_ecologies_sig_genes_DF,taxa_data_ordered[,-c(1,9)])
+pres_ecologies_sig_genes_DF$taxa_ID = consensus_taxa_ID_ordered$V2
+write.table(pres_ecologies_sig_genes_DF,file=paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/annotations/",database,"/",database,"_","all_annotations.txt",sep=""),sep="\t",quote=F,col.names=T,row.names=F)
+## now split by category
+
+pres_ecologies_sig_genes_DF_split = split(pres_ecologies_sig_genes_DF,pres_ecologies_sig_genes_DF$category)
+lapply(pres_ecologies_sig_genes_DF_split, function(mydf) {
+  cat_temp = unique(mydf$category)
+  write.table(mydf,file=paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/annotations/",database,"/",database,"_",cat_temp,"_annotations.txt",sep=""),sep="\t",quote=F,col.names=T,row.names=F)
+})
+
+# ok next step is to make a melted data table with all combinations. 
+pres_ecologies_sig_genes_DF_col_select = pres_ecologies_sig_genes_DF[,c("geneName","taxa_ID","category")]
+pres_ecologies_sig_genes_DF_col_select_ecologies = strsplit(pres_ecologies_sig_genes_DF_col_select$category,split="__",fixed=T)
+long_df = data.frame( gene=rep(pres_ecologies_sig_genes_DF_col_select$geneName, lengths(pres_ecologies_sig_genes_DF_col_select_ecologies)), taxaID=rep(pres_ecologies_sig_genes_DF_col_select$taxa_ID, lengths(pres_ecologies_sig_genes_DF_col_select_ecologies)),ecology=unlist(pres_ecologies_sig_genes_DF_col_select_ecologies))
+write.table(long_df,file=paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/melted_data/",database,"_gene_taxID_ecology.txt",sep=""),sep="\t",quote=F,col.names=T,row.names=F)
+}
+
+# gut-env
+get_sig_intersection_annotations(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/GUT_ENV_CONGENES_SEQS_sigGenes_intersections_binary_mat.txt",database="GUT_ENV_CONGENES_SEQS")
+#Gut-NHG
+get_sig_intersection_annotations(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_sigGenes_intersections_binary_mat.txt",database="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2")
+# aquatic terrestrial
+get_sig_intersection_annotations(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_sigGenes_intersections_binary_mat.txt",database="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS")
+```
+
+Next make abundance matrices for each of the three intersections so I can visualize the abundance of the genes in each sample
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(cowplot)
+library(data.table)
+library(ggpubr)
+library(rstatix)
+library(ggtext)
+library(scales)
+
+get_abundance_mat = function(input_path,database) {
+  all_count_files = list.files(path=input_path,pattern=paste("_",database,"_db_raw_counts.tsv.gz",sep=""),recursive = T,full.names = T)
+split_dirs = strsplit(all_count_files,split="/")
+sample_type = sapply(split_dirs,function(x) x[11])
+sample_type = gsub("_samples_output","",sample_type)
+sample_name = sapply(split_dirs,function(x) x[12])
+database_name = basename(all_count_files)
+database_name = sapply(strsplit(database_name,split="_"), function(x) paste(x[-1],collapse="_"))
+database_name = gsub("all_seqs_rep_30_collapsed_cluster.fasta_","",database_name)
+database_name = gsub("_db_raw_counts.tsv.gz","",database_name)
+
+## now create a category column.
+category = rep(NA,length(sample_type))
+category[sample_type=="airways"] = "human_non_gut"
+category[sample_type=="aquatic"] = "aquatic"
+category[sample_type=="aquatic_sediment"] = "aquatic"
+category[sample_type=="chicken_ceceum"] = "non_human_gut"
+category[sample_type=="coral"] = "aquatic_host"
+category[sample_type=="cow"] = "non_human_gut"
+category[sample_type=="glacier_permafrost"] = "soil"
+category[sample_type=="human_gut_nonindustry"] = "human_gut"
+category[sample_type=="human_gut"] = "human_gut"
+category[sample_type=="human_oral"] = "human_non_gut"
+category[sample_type=="mice"] = "non_human_gut"
+category[sample_type=="moose"] = "non_human_gut"
+category[sample_type=="nasal"] = "human_non_gut"
+category[sample_type=="phylloplane"] = "non_animal_host"
+category[sample_type=="rhizosphere"] = "non_animal_host"
+category[sample_type=="skin"] = "human_non_gut"
+category[sample_type=="soil"] = "soil"
+category[sample_type=="vaginal"] = "human_non_gut"
+file_df = data.frame(filename=all_count_files,database=database_name,sample_type,sample_name,category)
+## I only want a total of 25 human gut samples. 13 industrialized and 12 non-industrialized
+industrialized_sample_names = unique(file_df[file_df$sample_type == "human_gut","sample_name"])
+unindustrialized_sample_names = unique(file_df[file_df$sample_type == "human_gut_nonindustry","sample_name"])
+all_human_gut_samples = c(industrialized_sample_names,unindustrialized_sample_names)
+### pick a random 13 and 12 industrialized and non-industrialized respectivelys
+set.seed(1)
+chosen_industrialized = sample(industrialized_sample_names,13,replace = FALSE)
+chosen_nonindustrialized = sample(unindustrialized_sample_names,12,replace = FALSE)
+chosen_human_gut = c(chosen_industrialized,chosen_nonindustrialized)
+not_chosen_human_gut = setdiff(all_human_gut_samples,chosen_human_gut)
+## remove the human gut samples I did not choose
+file_df = file_df[which(!file_df$sample_name%in%not_chosen_human_gut),]
+## change the sample type from human_gut_nonindustry to just human_gut
+file_df$sample_type[file_df$sample_type == "human_gut_nonindustry"] = "human_gut"
+
+file_df$sample_type[file_df$sample_type == "phylloplane"] = "phyllosphere"
+file_df = file_df[-which(file_df$sample_type == "rhizosphere"),]
+file_df = file_df[-which(file_df$sample_type == "moose"),]
+
+# get the sample type, category pairs
+sample_categories = unique(file_df[,c(3,5)])
+write.table(sample_categories,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/sample_to_categories.txt",sep="\t",quote=F,col.names=T,row.names=F)
+
+### now that we have our table of samples lets get the abundance of each one
+myTab1 = fread(cmd= paste('zcat',file_df[1,1]),sep="\t",header=F)
+
+congenes_raw_mat = apply(file_df, 1, function(myrow) {
+  myTab = fread(cmd= paste('zcat',myrow[1],'| cut -f3'),sep="\t",header=F)
+  return(myTab)
+})
+congenes_raw_mat = do.call("cbind",congenes_raw_mat)
+congenes_raw_mat = as.matrix(congenes_raw_mat)
+sample_type_vec = file_df[,3]
+colnames(congenes_raw_mat) = sample_type_vec
+rownames(congenes_raw_mat) = myTab1$V1
+# remove star
+congenes_raw_mat = congenes_raw_mat[-match("*",rownames(congenes_raw_mat)),]
+myTab1_ordered = myTab1[match(rownames(congenes_raw_mat),myTab1$V1),]
+
+gene_names_no_ecology = tstrsplit(rownames(congenes_raw_mat),split="_",keep=c(2,3)) 
+gene_names_no_ecology = paste(gene_names_no_ecology[[1]],gene_names_no_ecology[[2]],sep="_")
+rownames(congenes_raw_mat) = gene_names_no_ecology
+# normalize by gene length
+congenes_raw_mat_normalized = matrix(0,nrow=nrow(congenes_raw_mat),ncol=ncol(congenes_raw_mat))
+for(x in 1:nrow(congenes_raw_mat)) {
+  gene_abundance_temp = congenes_raw_mat[x,]
+  gene_abundance_temp_norm = gene_abundance_temp/myTab1_ordered$V2[x]
+  congenes_raw_mat_normalized[x,] = gene_abundance_temp_norm
+}
+colnames(congenes_raw_mat_normalized) = colnames(congenes_raw_mat)
+rownames(congenes_raw_mat_normalized) = rownames(congenes_raw_mat)
+
+congenes_raw_mat = cbind(geneName=rownames(congenes_raw_mat),congenes_raw_mat)
+congenes_raw_mat_normalized = cbind(geneName=rownames(congenes_raw_mat_normalized),congenes_raw_mat_normalized)
+
+write.table(congenes_raw_mat,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/",database,"_abundance_mat.txt",sep=""),row.names=F,col.names=T,sep="\t",quote=F)
+write.table(congenes_raw_mat_normalized,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/",database,"_abundance_mat_normalized.txt",sep=""),row.names=F,col.names=T,sep="\t",quote=F)
+}
+
+get_abundance_mat(input_path="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output",database="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2")
+
+get_abundance_mat(input_path="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output",database="GUT_ENV_CONGENES_SEQS")
+
+get_abundance_mat(input_path="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output",database="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS")
+
+
+```
+
+Now make boxplots of the abundant genes
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(cowplot)
+library(data.table)
+library(ggpubr)
+library(rstatix)
+library(ggtext)
+library(scales)
+
+visualize_diff_abundant_genes = function(input_file,database,sig_genes_file) {
+# load in category info and sig genes
+sample_categories = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/sample_to_categories.txt",sep="\t",header=T)
+congenes_raw_mat = fread(input_file,sep="\t",header=T,data.table=F)
+rownames(congenes_raw_mat) = congenes_raw_mat$geneName
+congenes_raw_mat = congenes_raw_mat[,-1]
+# remove weird decimal places on column names
+colnames(congenes_raw_mat) = sapply(strsplit(colnames(congenes_raw_mat),split="[.]"), function(x) x[1])
+congenes_raw_mat = as.matrix(congenes_raw_mat)
+
+sig_gene_df = fread(sig_genes_file)
+congenes_raw_mat_sig = congenes_raw_mat[sig_gene_df$geneName_no_eco,]
+congenes_raw_mat_melt_sig_genes = reshape2::melt(congenes_raw_mat_sig)
+congenes_raw_mat_melt_sig_genes$category = sample_categories[match(congenes_raw_mat_melt_sig_genes$Var2,sample_categories$sample_type),"category"]
+### now normalize values by read length
+congenes_raw_mat_melt_sig_genes$value_norm_pseudo = congenes_raw_mat_melt_sig_genes$value+1
+congenes_raw_mat_melt_sig_genes$value_norm_log = log10(congenes_raw_mat_melt_sig_genes$value_norm_pseudo)
+
+# order by category
+boxplot_stats = congenes_raw_mat_melt_sig_genes %>% group_by(Var2) %>%  summarise(boxplot= list( setNames(boxplot.stats(value_norm_pseudo)$stats,c('lower_whisker','lower_hinge','median','upper_hinge','upper_whisker') ) ) ) %>% unnest_wider(boxplot)
+boxplot_stats$category = sample_categories[match(boxplot_stats$Var2,sample_categories[,1]),2]
+sample_order =  boxplot_stats$Var2[order(boxplot_stats$category)]
+sample_order = as.character(sample_order)
+congenes_raw_mat_melt_sig_genes$Var2 = factor(congenes_raw_mat_melt_sig_genes$Var2,levels = sample_order)
+
+## now put in colors
+library(RColorBrewer)
+#myCols = viridis(n=length(unique(sample_categories$category)))
+myCols = brewer.pal(n=length(unique(sample_categories$category)), name="Dark2")
+names(myCols) = unique(sample_categories$category)
+cat_order = sample_categories[match(sample_order,sample_categories$sample_type),"category"]
+myCols_ordered = myCols[match(cat_order,names(myCols))]
+
+
+# plot
+scaleFUN <- function(x) sprintf("%.2f", x)
+myplot2 = ggplot(congenes_raw_mat_melt_sig_genes, aes(x=Var2,y=value_norm_pseudo)) + geom_boxplot(aes(fill=category)) +  theme(axis.text.x = element_text(angle = 75,vjust=0.5,size = 15),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecology",y="Relative abundance") + geom_jitter(shape=16, position=position_jitter(0.2),size=0.2,alpha=0.5) + scale_y_continuous(trans=log10_trans(),breaks=trans_breaks("log10",function(x) 10^x),labels=scaleFUN) + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+png(paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/abundance_box_plots/",database,"_category_ordered_with_outliers_pairwise_difexp_filter_without_rizo2.png",sep=""),width=1000)
+print(myplot2)
+dev.off()
+
+# also create plot with outliers removed for easier visualization
+boxplot_stats$Var2 <- factor(boxplot_stats$Var2, levels = boxplot_stats$Var2[order(boxplot_stats$category)])
+
+boxplot_no_outliers <- ggplot(boxplot_stats, aes(x=Var2, lower=lower_hinge, upper=upper_hinge, middle=median, ymin=lower_whisker, ymax=upper_whisker,fill=category)) + geom_boxplot(stat="identity") +  theme(axis.text.x = element_text(angle = 75,vjust=0.5,size = 15),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecology",y="Relative abundance") + scale_y_continuous(trans=log10_trans(),breaks=trans_breaks("log10",function(x) 10^x),labels=scaleFUN) + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+pdf(paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/abundance_box_plots/",database,"_category_ordered_NO_outliers_pairwise_difexp_filter_without_rizo.pdf",sep=""))
+print(boxplot_no_outliers)
+dev.off()
+}
+
+visualize_diff_abundant_genes(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_abundance_mat_normalized.txt",database="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2",sig_genes_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/annotations/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_all_annotations.txt")
+
+visualize_diff_abundant_genes(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/GUT_ENV_CONGENES_SEQS_abundance_mat_normalized.txt",database="GUT_ENV_CONGENES_SEQS",sig_genes_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/annotations/GUT_ENV_CONGENES_SEQS/GUT_ENV_CONGENES_SEQS_all_annotations.txt")
+
+visualize_diff_abundant_genes(input_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_abundance_mat_normalized.txt",database="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS",sig_genes_file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/annotations/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_all_annotations.txt")
+```

@@ -1,0 +1,41 @@
+---
+title: "get_50perc_conserved_gene_prevalences"
+author: "Sam Zimmerman"
+date: "4/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I want to get the prevalence of genes but files are too large. So first I need to summarize them on O2
+
+
+```{bash}
+# first get name of our global conserved genes
+awk '{print $1'} /n/scratch3/users/b/btt5/orfletonv2/90percclust/GLOBAL-CONSERVATIVE_CONGENES_50 > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/consensus_global_conservative_genes_50perc.txt
+grep -f /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/consensus_global_conservative_genes_50perc.txt -F -w /n/scratch3/users/b/btt5/orfletonv2/90percclust/multi_map_50_collapsed.tsv > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/highly_conserved_genes_50perc_consenus_to_raw_mapping.txt
+```
+
+Now lets calculate the prevalence of each gene
+
+```{r}
+library(data.table)
+global_conserved_genes_raw_ecology = fread(cmd='cut -d "_" -f 1 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/highly_conserved_genes_50perc_consenus_to_raw_mapping.txt',header=F)
+global_conserved_genes_raw_sample = fread(cmd='cut -d "_" -f 2 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/highly_conserved_genes_50perc_consenus_to_raw_mapping.txt',header=F)
+global_conserved_genes = fread(cmd='cut -d $"\t" -f 2 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/highly_conserved_genes_50perc_consenus_to_raw_mapping.txt',header=F)
+# combine the 3 data tables together
+global_conserved_genes[, `:=`(ecology = global_conserved_genes_raw_ecology$V1,
+                            sample = global_conserved_genes_raw_sample$V1)]
+
+### get the prevalence of each conserved gene in each ecology
+global_conserved_genes_prevalence_by_ecosystem = global_conserved_genes[,.(prev=length(unique(sample))),by = .(V1, ecology)]
+# get the prevalence of each gene in all samples
+global_conserved_genes_prevalence_by_gene = global_conserved_genes[,.(prev=length(unique(sample))),by = .(V1)]
+
+write.table(global_conserved_genes_prevalence_by_ecosystem,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/global_conserved_genes_prevalence_by_ecosystem_50perc.txt",sep="\t",col.names=T,row.names=F,quote=F)
+write.table(global_conserved_genes_prevalence_by_gene,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/highly_conserved_gene_prevalences_50perc/global_conserved_genes_prevalence_by_gene_50perc.txt",sep="\t",col.names=T,row.names=F,quote=F)
+
+```
+

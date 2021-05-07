@@ -1,0 +1,22 @@
+---
+title: "get_number_GTDB_in_conserved_genes_50perc"
+author: "Sam Zimmerman"
+date: "4/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figure4_highly_conserved_genes/gtdbtk_analysis/")
+```
+
+
+```{r}
+aligned_bac120_df = fread("gtdb_aligned_to_conserved_consensus_genes_50perc.txt",header=F)
+bac120_found = length(unique(aligned_bac120_df$V4)) # 58 found 
+print(bac120_found)
+```
+

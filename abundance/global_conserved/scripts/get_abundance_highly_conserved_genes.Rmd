@@ -1,0 +1,129 @@
+---
+title: "fig4_global_conserved_genes"
+author: "Sam Zimmerman"
+date: "3/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{bash}
+# get 1,800 global conserved genes
+source activate /home/sez10/miniconda3/envs/meta_assemblers
+awk '{print $1}' /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_names
+seqtk subseq /n/scratch3/users/b/btt5/orfletonv2/pan_genes /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_names > /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_SEQS 
+
+```
+
+
+## Get abundance of globally conserved genes in 422 new sapmles
+
+```{bash}
+# first make DIAOMOND databases for all sets of genes I am interested in 
+sbatch -t 0-11:59 -p short -c 1 --mem=5G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/diamond_dbs/make_diamond_dbs.bash 
+
+## now run alignments. This is done for the below comparisons
+# Human gut specific, human gut and mammalian guts, human gut and environments, and global conserved genes.
+
+sbatch -c 4 -p short --mem=30G -t 0-11:00 --array=1-422%100 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/align_OV2_intersections_batch.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/fig3_4_input_all_IDs.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/tmp 4 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_GLOBAL-CONSERVATIVE_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT_ENV_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT_NON-HUMAN-MAMMALIAN-GUT_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT-SPECIFIC_CONGENES_SEQS_db.dmnd /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_GLOBAL-CONSERVATIVE_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT_ENV_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT_NON-HUMAN-MAMMALIAN-GUT_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT-SPECIFIC_CONGENES_SEQS
+
+```
+
+Make gene abundance matrix to visualize abundances
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(cowplot)
+library(data.table)
+library(ggpubr)
+library(rstatix)
+library(ggtext)
+library(scales)
+
+database = "GLOBAL-CONSERVATIVE_CONGENES_SEQS"
+
+all_count_files = list.files(path="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_output",pattern=paste("_",database,"_db_raw_counts.tsv.gz",sep=""),recursive = T,full.names = T)
+split_dirs = strsplit(all_count_files,split="/")
+sample_type = sapply(split_dirs,function(x) x[11])
+sample_type = gsub("_samples_output","",sample_type)
+sample_name = sapply(split_dirs,function(x) x[12])
+database_name = basename(all_count_files)
+database_name = sapply(strsplit(database_name,split="_"), function(x) paste(x[-1],collapse="_"))
+database_name = gsub("all_seqs_rep_30_collapsed_cluster.fasta_","",database_name)
+database_name = gsub("_db_raw_counts.tsv.gz","",database_name)
+
+category = rep(NA,length(sample_type))
+category[sample_type=="airways"] = "human_non_gut"
+category[sample_type=="aquatic"] = "aquatic"
+category[sample_type=="aquatic_sediment"] = "aquatic"
+category[sample_type=="chicken_ceceum"] = "non_human_gut"
+category[sample_type=="coral"] = "aquatic_host"
+category[sample_type=="cow"] = "non_human_gut"
+category[sample_type=="glacier_permafrost"] = "soil"
+category[sample_type=="human_gut_nonindustry"] = "human_gut"
+category[sample_type=="human_gut"] = "human_gut"
+category[sample_type=="human_oral"] = "human_non_gut"
+category[sample_type=="mice"] = "non_human_gut"
+category[sample_type=="moose"] = "non_human_gut"
+category[sample_type=="nasal"] = "human_non_gut"
+category[sample_type=="phylloplane"] = "non_animal_host"
+category[sample_type=="rhizosphere"] = "non_animal_host"
+category[sample_type=="skin"] = "human_non_gut"
+category[sample_type=="soil"] = "soil"
+category[sample_type=="vaginal"] = "human_non_gut"
+
+file_df = data.frame(filename=all_count_files,database=database_name,sample_type,sample_name,category)
+## I only want a total of 25 human gut samples. 13 industrialized and 12 non-industrialized
+industrialized_sample_names = unique(file_df[file_df$sample_type == "human_gut","sample_name"])
+unindustrialized_sample_names = unique(file_df[file_df$sample_type == "human_gut_nonindustry","sample_name"])
+all_human_gut_samples = c(industrialized_sample_names,unindustrialized_sample_names)
+### pick a random 13 and 12 industrialized and non-industrialized respectivelys
+set.seed(1)
+chosen_industrialized = sample(industrialized_sample_names,13,replace = FALSE)
+chosen_nonindustrialized = sample(unindustrialized_sample_names,12,replace = FALSE)
+chosen_human_gut = c(chosen_industrialized,chosen_nonindustrialized)
+not_chosen_human_gut = setdiff(all_human_gut_samples,chosen_human_gut)
+## remove the human gut samples I did not choose
+file_df = file_df[which(!file_df$sample_name%in%not_chosen_human_gut),]
+## change the sample type from human_gut_nonindustry to just human_gut
+file_df$sample_type[file_df$sample_type == "human_gut_nonindustry"] = "human_gut"
+
+file_df$sample_type[file_df$sample_type == "phylloplane"] = "phyllosphere"
+
+sample_categories = unique(file_df[,c(3,5)])
+write.table(sample_categories,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/sample_to_categories_conserved_genes.txt",sep="\t",quote=F,col.names=T,row.names=F)
+
+### now make table of gene abundances
+congenes_raw_mat = apply(file_df, 1, function(myrow) {
+  myTab = read.table(myrow[1],sep="\t",header=F)
+  myTab = myTab[-match("*",myTab[,1]),]
+  aligned_seq = myTab[,3]
+  names(aligned_seq) <- myTab[,1]
+  return(aligned_seq)
+})
+sample_type_vec = file_df[,3]
+colnames(congenes_raw_mat) = sample_type_vec
+
+# normalize data
+single_df = read.table(file_df[1,1],sep="\t",header=F)
+single_df_ordered = single_df[match(rownames(congenes_raw_mat),single_df$V1),]
+congenes_raw_mat_normalized = matrix(0,nrow=nrow(congenes_raw_mat),ncol=ncol(congenes_raw_mat))
+for(x in 1:nrow(congenes_raw_mat)) {
+  gene_abundance_temp = congenes_raw_mat[x,]
+  gene_abundance_temp_norm = gene_abundance_temp/single_df$V2[x]
+  congenes_raw_mat_normalized[x,] = gene_abundance_temp_norm
+}
+colnames(congenes_raw_mat_normalized) = colnames(congenes_raw_mat)
+rownames(congenes_raw_mat_normalized) = rownames(congenes_raw_mat)
+congenes_raw_mat = cbind(geneName=rownames(congenes_raw_mat),congenes_raw_mat)
+congenes_raw_mat_normalized = cbind(geneName=rownames(congenes_raw_mat_normalized),congenes_raw_mat_normalized)
+write.table(congenes_raw_mat,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/",database,"_abundance_mat.txt",sep=""),row.names=F,col.names=T,sep="\t",quote=F)
+write.table(congenes_raw_mat_normalized,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/gene_abundance_matrices/",database,"_abundance_mat_normalized.txt",sep=""),row.names=F,col.names=T,sep="\t",quote=F)
+
+```

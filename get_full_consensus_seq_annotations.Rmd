@@ -1,0 +1,86 @@
+---
+title: "get_consensus_seq_category"
+author: "Sam Zimmerman"
+date: "4/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Make a data table with the consensus gene in a column, and other columns with the functional and taxonomic annotations. Also include columns of what samples the gene is differentially abundant in 
+
+```{r}
+library(data.table)
+# load in annotation matrix with gene functions
+functional_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v3.txt | grep -v 'ftype'"),header=F)
+#load in taxonomic annotations
+taxa_annotations = fread("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",header=T,sep="\t")
+# load in taxonomic IDs for consensus genes
+taxa_id_annotations = fread("/n/scratch3/users/a/adk9/orfleton/ov2_gene_taxa_annotation")
+### match everything together
+taxa_annotations_ordered = taxa_annotations[match(functional_annotations$V1,taxa_annotations$geneName)]
+
+taxa_id_annotations_geneName_no_eco = tstrsplit(taxa_id_annotations$V1,split="_",keep=c(2,3),fixed=T)
+taxa_id_annotations_geneName_no_eco_vec = paste(taxa_id_annotations_geneName_no_eco[[1]],taxa_id_annotations_geneName_no_eco[[2]],sep ="_")
+taxa_id_annotations[,gene_names_no_eco:=taxa_id_annotations_geneName_no_eco_vec]
+taxa_id_annotations_ordered = taxa_id_annotations[match(functional_annotations$V1,taxa_id_annotations$gene_names_no_eco)]
+
+
+
+taxa_id_annotations_ordered_geneNames = taxa_id_annotations_ordered$V1
+## load in binary matrices that have the gene names from the intersections
+aquatic_terr_genes = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_sigGenes_intersections_binary_mat.txt",sep="\t",header=T,row.names = 1)
+aquatic_terr_genes_colnames = colnames(aquatic_terr_genes)
+aquatic_terr_genes_samp_types = apply(aquatic_terr_genes, 1, function(x) paste(aquatic_terr_genes_colnames[x==1],collapse=","))
+aquatic_terr_genes_samps = data.frame(gene=names(aquatic_terr_genes_samp_types),category=rep("aquatic_and_terrestrial",length(aquatic_terr_genes_samp_types)),sample_type=aquatic_terr_genes_samp_types)
+
+gut_env_genes = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/GUT_ENV_CONGENES_SEQS_sigGenes_intersections_binary_mat.txt",sep="\t",header=T,row.names = 1)
+gut_env_genes_colnames = colnames(gut_env_genes)
+gut_env_genes_samp_types = apply(gut_env_genes, 1, function(x) paste(gut_env_genes_colnames[x==1],collapse=","))
+gut_env_genes_samp_types_df = data.frame(gene=names(gut_env_genes_samp_types),category=rep("gut_and_environment",length(gut_env_genes_samp_types)),sample_type=gut_env_genes_samp_types)
+
+gut_nhg_genes = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_sigGenes_intersections_binary_mat.txt",sep="\t",header=T,row.names = 1)
+gut_nhg_genes_colnames = colnames(gut_nhg_genes)
+gut_nhg_genes_samp_types = apply(gut_nhg_genes, 1, function(x) paste(gut_nhg_genes_colnames[x==1],collapse=","))
+gut_nhg_genes_samp_types_df = data.frame(gene=names(gut_nhg_genes_samp_types),category=rep("gut_and_non-human-gut",length(gut_nhg_genes_samp_types)),sample_type=gut_nhg_genes_samp_types)
+
+highly_conserved_genes = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/global_conserved_gene_functions/global_conserved_genes_prevalence_GTDB_annotated.txt",sep="\t",header=T,quote="")
+all_sample_types = c(gut_env_genes_colnames,"coral","human_airways","human_oral","human_nasal","human_skin","human_vaginal","phyllosphere","rhizosphere","moose")
+all_sample_types = paste(all_sample_types,collapse=",")
+highly_conserved_genes_sample_types_df = data.frame(gene=highly_conserved_genes$V2,category=rep("all_ecologies",length(highly_conserved_genes$V2)),sample_type = rep(all_sample_types,length(highly_conserved_genes$V2)))
+
+human_specific_genes = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/pval_tables/sig_genes_binary_mat_human_vs_non_gut.txt",sep="\t",header=T,row.names = 1)
+human_specific_genes_colnames = colnames(human_specific_genes)
+human_specific_genes_samp_types = apply(human_specific_genes, 1, function(x) paste(human_specific_genes_colnames[x==1],collapse=","))
+human_specific_genes_samp_types_df = data.frame(gene=names(human_specific_genes_samp_types),category=rep("human",length(human_specific_genes_samp_types)),sample_type=human_specific_genes_samp_types)
+
+category_specific_genes = rbind(aquatic_terr_genes_samps,gut_env_genes_samp_types_df,gut_nhg_genes_samp_types_df,highly_conserved_genes_sample_types_df,human_specific_genes_samp_types_df)
+
+category_specific_genes_ordered = category_specific_genes[match(taxa_id_annotations_ordered_geneNames,category_specific_genes$gene),]
+
+### now make a data frame with all annotations
+
+all_consensus_seq_annotations = cbind(full_gene_name=taxa_id_annotations_ordered_geneNames,functional_annotations)
+all_consensus_seq_annotations[,superkingdom:=taxa_annotations_ordered$superkingdom]
+all_consensus_seq_annotations[,phylum:=taxa_annotations_ordered$phylum]
+all_consensus_seq_annotations[,class:=taxa_annotations_ordered$class]
+all_consensus_seq_annotations[,order:=taxa_annotations_ordered$order]
+all_consensus_seq_annotations[,family:=taxa_annotations_ordered$family]
+all_consensus_seq_annotations[,genus:=taxa_annotations_ordered$genus]
+all_consensus_seq_annotations[,species:=taxa_annotations_ordered$species]
+all_consensus_seq_annotations[,taxaID:=taxa_id_annotations_ordered$V2]
+all_consensus_seq_annotations[,category:=category_specific_genes_ordered$category]
+all_consensus_seq_annotations[,sample_types_present:=category_specific_genes_ordered$sample_type]
+colnames(all_consensus_seq_annotations)[2] = "gene_name"
+colnames(all_consensus_seq_annotations)[3] = "sequence_type"
+colnames(all_consensus_seq_annotations)[4] = "gene_length"
+colnames(all_consensus_seq_annotations)[5] = "gene_name_prokka"
+colnames(all_consensus_seq_annotations)[6] = "EC"
+colnames(all_consensus_seq_annotations)[7] = "COG"
+colnames(all_consensus_seq_annotations)[8] = "protein_description"
+
+
+write.table(all_consensus_seq_annotations,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/consensus_gene_functions_taxa_category.txt",sep="\t",col.names=T,row.names=F,quote=F)
+```

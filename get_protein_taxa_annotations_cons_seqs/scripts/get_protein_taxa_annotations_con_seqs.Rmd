@@ -1,0 +1,170 @@
+---
+title: "get_protein_taxa_annotations_consensus_seqs"
+author: "Sam Zimmerman"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Get functional annotations for each consensus gene
+
+## First get the tsv file for all consensus sequences
+
+```{bash}
+grep ">" /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta | tr -d '>' | cut -d '_' -f2- | cut -d ' ' -f1 > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names/all_seqs_rep_30_collapsed_cluster_names.txt
+## now get the annotation file for those genes
+
+# run command in directory /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names
+split -l 1000000 -d all_seqs_rep_30_collapsed_cluster_names.txt all_seqs_rep_30_collapsed_cluster_names_ 
+
+for x in /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names/all_seqs_rep_30_collapsed_cluster_names_*; do sbatch -c 1 -p short --mem=20G -t 0-02:00 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/get_rep_30_tsv_files.bash ${x}; done
+
+## do ones that did not complete
+grep -f all_seqs_rep_30_collapsed_cluster_names_78 -F -w /n/scratch3/users/b/btt5/orfletonv2/tsv_data/pan_tsv_data > all_seqs_rep_30_collapsed_cluster_names_78_tsv_data
+
+grep -f all_seqs_rep_30_collapsed_cluster_names_77 -F -w /n/scratch3/users/b/btt5/orfletonv2/tsv_data/pan_tsv_data > all_seqs_rep_30_collapsed_cluster_names_77_tsv_data
+
+grep -f all_seqs_rep_30_collapsed_cluster_names_44 -F -w /n/scratch3/users/b/btt5/orfletonv2/tsv_data/pan_tsv_data > all_seqs_rep_30_collapsed_cluster_names_44_tsv_data
+
+cat *_tsv_data > all_seqs_rep_30_collapsed_cluster_names_tsv_data
+```
+
+```{r}
+library(data.table)
+consensus_seq_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names/all_seqs_rep_30_collapsed_cluster_names_tsv_data | grep -v 'ftype'"),header=F)
+
+consensus_gene_names = fread("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names/all_seqs_rep_30_collapsed_cluster_names.txt",header=F)
+
+missingGenes = setdiff(consensus_gene_names$V1,consensus_seq_annotations$V1)
+write.table(missingGenes,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/missing_consensus_gene_annotations.txt",col.names=F,row.names=F,quote=F)
+```
+
+
+Now get the sequences
+
+```{bash}
+### get samples I need to rerun prokka on
+awk -F '_' '{print $1}' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/missing_consensus_gene_annotations.txt | sort | uniq > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/samples_to_rerun_prokka_on.txt
+# 1. aquatic ERR598986/ERS494559. EKFMGKCB. MGYS00002008
+# 2. HMP2 SRS058693. HDLLHMDI
+# 3. aquatic SRR1699484. IIJEAJGO
+# 4. HMP2 SRS143062. KCAHPEKB
+# 5. HMP2 SRS077568. NMBCPFIN
+
+tar -xzvf /n/scratch3/users/v/vnl3/orfleton_v2_prokka_output/SRS058693_prokka_out.tar.gz 
+tar -xzvf /n/scratch3/users/v/vnl3/orfleton_v2_prokka_output/SRS143062_prokka_out.tar.gz 
+tar -xzvf /n/scratch3/users/v/vnl3/orfleton_v2_prokka_output/SRS077568_prokka_out.tar.gz 
+
+### okay now run prokka on the 5 samples needed to be redone
+/home/sez10/kostic_lab/gene_catalogue/run_prokka_only/batch_run_prokka_only.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/files_to_rerun_prokka_on.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/prokka_out 4
+
+#### so for SRS058693 I can get the information I need directly from the gff file
+
+## first get GFF file
+sed '/##FASTA/Q' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/n/scratch2/vnl3/orfleton2_prokka_out/SRS058693_prokka_out/PROKKA_05242020.gff > /n/scratch3/users/s/sez10/gene_catalogue/enrichment/SRS058693.gff
+```
+
+#Extract sequence annotations from SRS058693, SRS143062, SRS077568
+
+```{r}
+library(rtracklayer)
+myGFF = readGFF("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/SRS058693.gff")
+## read in missing locus tags
+missing_loc = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/missing_consensus_gene_annotations.txt",header=F)
+myGFF_missing_genes = myGFF[myGFF$locus_tag%in%missing_loc$V1,]
+myGFF_missing_genes_length = (myGFF_missing_genes$end - myGFF_missing_genes$start)+1
+locus_tag = myGFF_missing_genes$locus_tag
+type = myGFF_missing_genes$type
+gene = myGFF_missing_genes$gene
+eC_number = myGFF_missing_genes$eC_number
+COG = myGFF_missing_genes$db_xref
+COG = gsub("COG:","",COG)
+product = myGFF_missing_genes$product
+tsv_df = data.frame(locus_tag,type,myGFF_missing_genes_length,gene,eC_number,COG,product)
+tsv_df[is.na(tsv_df)] <- ""
+colnames(tsv_df) = c("locus_tag","ftype","length_bp","gene","EC_number","COG","product")
+
+### now read in prokka out from SRS143062
+SRS143062_prokka = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/prokka_out/SRS143062/PROKKA_02162021.tsv",sep="\t",header=T,quote="")
+SRS143062_prokka_missing = SRS143062_prokka[SRS143062_prokka$locus_tag%in%missing_loc$V1,]
+## now do SRS077568
+SRS077568_prokka = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/prokka_out/SRS077568/PROKKA_02162021.tsv",sep="\t",header=T,quote="")
+SRS077568_prokka_missing = SRS077568_prokka[SRS077568_prokka$locus_tag%in%missing_loc$V1,]
+
+missing_annotations_df = rbind(tsv_df,SRS143062_prokka_missing,SRS077568_prokka_missing)
+write.table(missing_annotations_df,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/missing_annotations.txt",col.names=F,row.names=F,quote=F,sep="\t")
+```
+
+ok now concatenate the missing values with the larger consensus annotations
+
+```{bash}
+cat /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names/all_seqs_rep_30_collapsed_cluster_names_tsv_data /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/missing_annotations.txt > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt
+```
+
+
+##Get missing genes left
+```{r}
+library(data.table)
+consensus_seq_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt | grep -v 'ftype'"),header=F)
+
+consensus_gene_names = fread("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names/all_seqs_rep_30_collapsed_cluster_names.txt",header=F)
+
+missingGenes = setdiff(consensus_gene_names$V1,consensus_seq_annotations$V1)
+write.table(missingGenes,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/missing_consensus_gene_annotations_p2.txt",col.names=F,row.names=F,quote=F)
+
+```
+
+#Extract annotations from ERR598986 and SRR1699484
+
+```{r}
+missing_loc = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/missing_consensus_gene_annotations_p2.txt",header=F)
+
+ERR598986_prokka = read.table("/n/scratch3/users/b/btt5/orfletonv2/env_samps/ena/done/ERR598986/PROKKA_04232021.tsv",sep="\t",header=T,quote="")
+ERR598986_prokka_missing = ERR598986_prokka[ERR598986_prokka$locus_tag%in%missing_loc$V1,]
+
+
+SRR1699484_prokka = read.table("/n/scratch3/users/b/btt5/orfletonv2/env_samps/ena/done/SRR1699484/PROKKA_04232021.tsv",sep="\t",header=T,quote="")
+SRR1699484_prokka_missing = SRR1699484_prokka[SRR1699484_prokka$locus_tag%in%missing_loc$V1,]
+
+missing_annotations_df = rbind(ERR598986_prokka_missing,SRR1699484_prokka_missing)
+write.table(missing_annotations_df,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/missing_annotations_part2.txt",col.names=F,row.names=F,quote=F,sep="\t")
+
+```
+
+ok now concatenate the missing values with the larger consensus annotations
+
+```{bash}
+cat /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/env_assemblies_redo/missing_annotations_part2.txt > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v3.txt
+```
+
+##Get taxonomic ID for each of the consensus genes
+
+```{r}
+library(taxonomizr)
+library(data.table)
+
+## date these files acquired are February 21, 2021
+taxaNames = read.names.sql('/n/scratch3/users/s/sez10/gene_catalogue/enrichment/names.dmp','IDtaxa.sql')
+taxaNodes = read.nodes.sql('/n/scratch3/users/s/sez10/gene_catalogue/enrichment/nodes.dmp','IDtaxa.sql')
+## read in taxa 
+consensus_taxa = fread("/n/scratch3/users/a/adk9/orfleton/ov2_gene_taxa_annotation",sep="\t",header=F)
+
+consensus_taxa_IDs = unique(consensus_taxa$V2)
+
+taxonomies = getTaxonomy(consensus_taxa_IDs,sqlFile=taxaNodes,desiredTaxa = c("superkingdom", "phylum", "class", "order", "family", "genus","species"))
+## add taxonomies to genes
+taxonomies_ordered = taxonomies[match(consensus_taxa$V2,as.numeric(rownames(taxonomies))),]
+rownames(taxonomies_ordered) = consensus_taxa$V1
+### edit rownames so I remove the ecology
+rownames_split = tstrsplit(rownames(taxonomies_ordered),split="_",fixed=TRUE,keep=c(2,3))
+new_rownames = paste(rownames_split[[1]],rownames_split[[2]],sep="_")
+rownames(taxonomies_ordered) = new_rownames
+sample = tstrsplit(rownames(taxonomies_ordered),split="_",fixed=TRUE,keep=c(1))
+sample = sample[[1]]
+taxonomies_ordered = cbind(taxonomies_ordered,sample=sample)
+taxonomies_ordered = cbind(geneName=rownames(taxonomies_ordered),taxonomies_ordered)
+write.table(taxonomies_ordered,file="/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",sep="\t",col.name=T,row.names=F,quote=F)
+```

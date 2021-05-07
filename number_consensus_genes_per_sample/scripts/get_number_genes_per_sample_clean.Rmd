@@ -1,0 +1,129 @@
+---
+title: "get_number_genes_per_sample_clean"
+author: "Sam Zimmerman"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{bash}
+# get number of genes in each sample for human samples. cluster at 30% identity first
+
+# this command is done in /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/human_gene_counts_iterative_clustering/input_files
+split -l 100 -d /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/count_gene_number_OV2_input_files/OV2_faa_files.txt OV2_faa_files_
+
+### 
+for x in /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/human_gene_counts_iterative_clustering/input_files/OV2_faa_files_*;
+do
+  sbatch -c 1 -t 0-11:59 -p short --mem=5G count_gene_number_OV2.bash $x /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/human_gene_counts_iterative_clustering/clustering_res
+done
+
+```
+
+Now cluster genes from non-human samples
+
+First we need to get a list of all the non-human sample IDs
+
+
+```{bash}
+# note originally this was done with an older metadata file. Results shouldn't change except for getting the alignment of 2 more samples from glacier environments
+metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_march_22_2021.csv",header=T)
+metadata_nonhuman = metadata[metadata$human_env_nonhumanhost != "HUMAN",]
+sample_IDs = metadata_nonhuman$prokka_id
+sample_IDs = paste("_",sample_IDs,"_",sep="")
+write.table(sample_IDs, file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_prokka_IDs.txt",col.names=F,row.names=F,quote=F)
+
+```
+
+## next get all the non human gene names 
+
+```{bash}
+grep ">" /n/scratch3/users/b/btt5/orfletonv2/pan_genes | grep -f /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_prokka_IDs.txt -F > /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_gene_names.txt
+cut -f 1 -d ' ' /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_gene_names.txt | cut -c2- > /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_gene_names_IDsonly.txt
+```
+
+## Now separate the gene names into individual files. 1 for each sample/prokka ID
+
+```{r}
+library(data.table)
+gene_names = fread("/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_gene_names_IDsonly.txt",header=F)
+sample_names = fread(cmd="awk -F'_' '{print $(NF-1)}' /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/non_human_gene_names_IDsonly.txt",header=F)
+gene_names[, `:=`(sample = sample_names$V1)]
+gene_names[,write.table(V1,file=paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_",.BY,".txt",sep=""),col.names=F,row.names=F,quote=F),by = .(sample)]
+```
+
+## Now get the full genes for each sample/prokka ID and cluster those genes in each sample separately.
+
+```{bash}
+ls /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_* > /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_files.txt
+split -l 8 -d /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_files.txt gene_name_files_
+for x in /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_files_*
+do
+sbatch -n 1 -t 0-11:59 -p short --mem=10G /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/count_gene_number_nonhuman_OV2.bash ${x} /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_clusters_in_each_sample
+done
+
+# need to do 2 more glacier samples
+
+
+sbatch -c 1 -t 0-11:59 -p short --mem=15G /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/count_gene_number_OV2.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/glacier_samp_OFCT01.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_clusters_in_each_sample
+
+sbatch -c 1 -t 0-11:59 -p short --mem=15G /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/count_gene_number_OV2.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/glacier_samp_OFDM01.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_clusters_in_each_sample
+
+
+```
+
+
+#Now count the number of genes per sample
+
+```{r}
+library(data.table)
+human_files = list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/human_gene_counts_iterative_clustering/clustering_res",full.names = T,recursive = T,pattern=".tsv")
+nonhuman_files = list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_clusters_in_each_sample",full.names = T,recursive = T,pattern=".tsv")
+
+human_gene_in_each_sample = sapply(human_files, function(x) {
+  sampleName = basename(gsub("_prokka_out_DB_clu.tsv","",x))
+  sample_df = fread(x,header=F,sep="\t")
+  geneNumber_30perc = length(unique(sample_df$V1))
+  total_gene_number = nrow(sample_df)
+  return(c(sampleName,total_gene_number,geneNumber_30perc))
+})
+human_gene_in_each_sample = t(human_gene_in_each_sample)
+colnames(human_gene_in_each_sample) <- c("sample","total_gene_number","30perc_gene_number")
+write.table(human_gene_in_each_sample,"/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/human_gene_counts_iterative_clustering/gene_number_orfletonV2_human_host_samples_30perc_aa.txt",sep="\t",quote=F,col.names=T,row.names=F)
+## now do same thing for nonhuman samples
+
+nonhuman_gene_in_each_sample = sapply(nonhuman_files, function(x) {
+  sampleName = basename(gsub("_DB_clu.tsv","",x))
+  sample_df = fread(x,header=F,sep="\t")
+  geneNumber_30perc = length(unique(sample_df$V1))
+  total_gene_number = nrow(sample_df)
+  return(c(sampleName,total_gene_number,geneNumber_30perc))
+})
+nonhuman_gene_in_each_sample = t(nonhuman_gene_in_each_sample)
+colnames(nonhuman_gene_in_each_sample) <- c("sample","total_gene_number","30perc_gene_number")
+write.table(nonhuman_gene_in_each_sample,"/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_number_orfletonV2_nonhuman_samples_30perc_aa.txt",sep="\t",quote=F,col.names=T,row.names=F)
+```
+
+Count number of genes in the 2 glacier samples
+
+```{r}
+library(data.table)
+glacier_samples = c("/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_clusters_in_each_sample/OFCT01/OFCT01_DB_clu.tsv","/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_clusters_in_each_sample/OFDM01/OFDM01_DB_clu.tsv")
+
+
+nonhuman_gene_in_each_sample = sapply(glacier_samples, function(x) {
+  sampleName = basename(gsub("_DB_clu.tsv","",x))
+  sample_df = fread(x,header=F,sep="\t")
+  geneNumber_30perc = length(unique(sample_df$V1))
+  total_gene_number = nrow(sample_df)
+  return(c(sampleName,total_gene_number,geneNumber_30perc))
+})
+nonhuman_gene_in_each_sample = t(nonhuman_gene_in_each_sample)
+colnames(nonhuman_gene_in_each_sample) <- c("sample","total_gene_number","30perc_gene_number")
+write.table(nonhuman_gene_in_each_sample,"/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/gene_number_orfletonV2_nonhuman_samples_30perc_aa_last2_glacier_samples.txt",sep="\t",quote=F,col.names=T,row.names=F)
+
+```
+

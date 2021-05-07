@@ -1,0 +1,35 @@
+---
+title: "make_gtdbtk_prevalence_plots"
+author: "Sam Zimmerman"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Make plots locally in DropBox
+
+```{r}
+prevalence_all_ecosystems_df = read.table("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gtdb_tk_prevalence/prevalence_all_samples.txt",sep="\t",header=T)
+prevalence_each_ecosystem_df = read.table("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gtdb_tk_prevalence/prevalence_all_samples_per_ecology.txt",sep="\t",header=T)
+
+# make plot with the proportion of samples the gtdbtk gene is in
+
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gtdb_tk_prevalence/figures/gtdbtk_genes_prevalence.pdf")
+ggplot(data=prevalence_all_ecosystems_df,aes(x=reorder(gene,fraction), y=fraction)) + geom_bar(stat="identity") + theme(axis.text.x = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"),axis.ticks.x=element_blank()) + labs(x = "genes",y="proportion of samples")
+dev.off()
+
+# histogram of the proportion of samples the gtdb-tk genes are in.
+hist(prevalence_all_ecosystems_df$fraction,xlab=c("fraction of samples"),main=c("fraction of samples the 120 GTDB genes are in"))
+# boxplot 
+boxplot(prevalence_all_ecosystems_df$fraction,xlab=c("fraction of samples"),main=c("fraction of samples the 120 GTDB genes are in"))
+
+# now do boxplots for each ecology
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gtdb_tk_prevalence/figures/gtdbtk_genes_prevalence_per_ecology.pdf")
+ggplot(data=prevalence_each_ecosystem_df,aes(x=ecosystem, y=frac)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45,vjust=0.5),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecosystem",y="fraction of samples in an ecosystem",title = "fraction of ecosystem samples the 120 GTDB genes are in")
+dev.off()
+
+```
+

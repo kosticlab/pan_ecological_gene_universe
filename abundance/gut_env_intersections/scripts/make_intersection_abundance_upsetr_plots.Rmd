@@ -1,0 +1,45 @@
+---
+title: "make_intersection_abundance_upsetr_plots"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/abundance/pval_tables_all_comparisons")
+```
+
+```{r}
+library(UpSetR)
+
+make_upset_r_plots = function(input_file,database) {
+binary_mat = read.table(input_file,sep="\t",header=T,row.names = 1)
+# get the different combos of intersections 
+binary_mat_cols = colnames(binary_mat)
+pres_ecologies_sig_genes = apply(binary_mat, 1,function(x) {
+  egologies = binary_mat_cols[which(x==1)]
+  egologies = paste(egologies,collapse="__")
+  return(egologies)
+})
+high_intersection_num = names(which(table(pres_ecologies_sig_genes)>500))
+genes_to_put_in_upsetr = names(pres_ecologies_sig_genes[pres_ecologies_sig_genes%in%high_intersection_num])
+binary_mat_filt = binary_mat[genes_to_put_in_upsetr,]
+pres_ecologies_sig_genes
+pdf(paste("upsetr_plots/",database,"_intersections_upsetr.pdf",sep=""),width=14,height=8)
+myupsetplot = upset(binary_mat_filt, nsets=length(colnames(binary_mat_filt)),nintersects=NA,order.by="freq")
+print(myupsetplot)
+dev.off()
+}
+
+make_upset_r_plots(input_file="sig_gene_binary_mats/GUT_ENV_CONGENES_SEQS_sigGenes_intersections_binary_mat.txt",database="GUT_ENV_CONGENES_SEQS")
+#Gut-NHG
+make_upset_r_plots(input_file="sig_gene_binary_mats/HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_sigGenes_intersections_binary_mat.txt",database="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2")
+# aquatic terrestrial
+make_upset_r_plots(input_file="sig_gene_binary_mats/AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_sigGenes_intersections_binary_mat.txt",database="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS")
+
+```

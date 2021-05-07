@@ -1,0 +1,522 @@
+---
+title: "clusterin_OV2_v2"
+author: "Sam Zimmerman"
+date: "1/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+theme_set(theme_cowplot())
+
+```
+
+Cluster. Done locally on my computer
+
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/")
+```
+
+```{r}
+library(umap)
+library(cluster)
+library(dbscan)
+library(ggplot2)
+library(data.table)
+#library(reticulate)
+#use_python("/usr/bin/python3")
+
+
+# first load in SVD
+
+myTab_50pcs = read.table("multi_map_30_collapsed_processed_v2_50PCs_v2_min_prevalence0.txt",sep="\t",header=F)
+myTab_10pcs = read.table("multi_map_30_collapsed_processed_v2_10PCs_v2_min_prevalence0.txt",sep="\t",header=F)
+myTab_100pcs = read.table("multi_map_30_collapsed_processed_v2_100PCs_v2_min_prevalence0.txt",sep="\t",header=F)
+
+
+# get sample names
+sample_names_50pcs = myTab_50pcs[,1]
+sample_names_10pcs = myTab_10pcs[,1]
+sample_names_100pcs = myTab_100pcs[,1]
+
+# remove sample name column from matrix
+myTab_50pcs = myTab_50pcs[,-1]
+myTab_10pcs = myTab_10pcs[,-1]
+myTab_100pcs = myTab_100pcs[,-1]
+
+### scale SVD before continuing
+# z-score normalize each PC in matrix
+myTab_50pcs_col_normalized = scale(myTab_50pcs, center = TRUE, scale = TRUE)
+myTab_50pcs_col_normalized = as.data.frame(myTab_50pcs_col_normalized)
+
+### function to do run UMAP, do hdbscan clustering, and get sihouette score
+clac_umap_silhouette_score = function(mySVDMat,nneighbors,mindist,ncomponents,minclust) {
+  mymat = umap(mySVDMat,n_neighbors=nneighbors,min_dist=mindist,n_components=ncomponents,random_state=42)
+  hdb_res = hdbscan(x=mymat$layout,minPts=minclust)
+  # calc silhouette score
+  # first get members that are in clusters
+  hdb_res_inclust = which(hdb_res$cluster!= 0)
+  hdb_res_clusters = hdb_res$cluster[hdb_res_inclust]
+  # get points in cluster
+  mymat_embedding = mymat$layout[hdb_res_inclust,]
+  hdb_sil = silhouette(hdb_res_clusters,dist(mymat_embedding,method = "euclidean"))
+  mean_sil_score = mean(summary(hdb_sil)[[2]])
+  n_neighbor_stat = mymat$config$n_neighbors
+  min_dist_stat = mymat$config$min_dist
+  cluster_labels = hdb_res$cluster
+  num_of_clusters = length(hdb_res$cluster_scores)
+  noise_points = sum(hdb_res$cluster== 0)
+  clustering_params = c(silhouette_score=mean_sil_score,umap_n_neighbors=n_neighbor_stat,umap_min_dist=min_dist_stat,umap_n_components=ncomponents,hdbscan_min_cluster_size=minclust,number_of_clusters=num_of_clusters,noise_points=noise_points)
+  output_info = list(cluster_labels=cluster_labels,cluster_stats=clustering_params,umap_object=mymat)
+  return(output_info)
+}
+
+# function to visualize clusters
+visualize_umap_clusters = function(umap_embeddings,clusterLabels) {
+  
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+
+  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0.1)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black")) #+scale_color_brewer(palette = 'Set3')
+    print(myplot)
+}
+
+visualize_umap_clusters_noNA = function(umap_embeddings,clusterLabels) {
+  
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+  
+    myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape,alpha=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black"))
+    print(myplot)
+}
+
+
+visualize_umap_jitter_clusters = function(umap_embeddings,clusterLabels) {
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_jitter(width = 0.25)
+}
+
+visualize_umap_clusters_continuous = function(umap_embeddings,clusterLabels) {
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.numeric(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point()
+}
+
+
+# make a matrix that stores all the parameters to use in clustering and UMAP creation
+two_components_vec = c(2)
+mindist_vec = c(0.1,0.25,0.5)
+nneighbors_vec = c(10,15,20,30)
+all_parameter_combos_2components = expand.grid(nneighbors_vec,mindist_vec,two_components_vec)
+colnames(all_parameter_combos_2components) = c("nneighbors","mindist","ncomponents")
+
+# run clustering
+umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled = apply(all_parameter_combos_2components, 1, function(x) clac_umap_silhouette_score(mySVDMat=myTab_50pcs_col_normalized,nneighbors=x[1],mindist=x[2],ncomponents=x[3],minclust=50))
+
+# get number of clusters and silhouette score for each combination of parameters
+umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_stats = sapply(umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled, function(x) x$cluster_stats)
+
+# output version that has high silhouette score and clusters most points
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist.pdf")
+visualize_umap_clusters(umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled[[1]]$umap_object$layout,umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled[[1]]$cluster_labels) # sillhouette is 0.682 and unclustered points is 81
+dev.off()
+
+## next output cluster labels to file
+umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_dataframe = data.frame(sample_names_50pcs,umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled[[1]]$cluster_labels)
+colnames(umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_dataframe) = c("sample","cluster")
+write.table(umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_dataframe,file="umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_cluster_mem.txt",sep="\t",col.names=T,row.names=F,quote=F)
+### output UMAP coordinates to file
+write.table(umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled[[1]]$umap_object$layout,file="umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_UMAP_embeddings.txt",quote=F,row.names=F,col.names=F,sep="\t")
+```
+
+```{r}
+library(data.table)
+library(ggplot2)
+### load in visualization functions
+visualize_umap_clusters = function(umap_embeddings,clusterLabels) {
+  
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+
+  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0.1)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black")) #+scale_color_brewer(palette = 'Set3')
+    print(myplot)
+}
+
+visualize_umap_clusters_noNA = function(umap_embeddings,clusterLabels) {
+  
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+  
+    myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape,alpha=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black"))
+    print(myplot)
+}
+
+visualize_umap_clusters_continuous = function(umap_embeddings,clusterLabels) {
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.numeric(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+
+  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape,alpha=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black"))
+  print(myplot)
+}
+
+
+
+# load in embedings
+UMAP_embeddings = read.table("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_UMAP_embeddings.txt",sep="\t",header=F)
+# load in cluster labels
+cluster_labels = read.table("umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_cluster_mem.txt",sep="\t",header=T)
+sample_names_50pcs = cluster_labels$sample
+
+### print out cluster
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist.pdf")
+visualize_umap_clusters(UMAP_embeddings,cluster_labels$cluster)
+dev.off()
+
+
+#### THE NEXT STEP IS TO ANNOTATE THE UMAP with different metadata
+ov2_metadata = read.csv("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/human_env_metadata_march_22_2021.csv")
+
+ov2_metadata_ordered = ov2_metadata[match(sample_names_50pcs,ov2_metadata$prokka_id),]
+
+### get conditions that have greater than 10 samples. otherwise do NA
+more_common_coditions = names(which(table(ov2_metadata_ordered$condition_2) > 10))
+common_conditions = ov2_metadata_ordered$condition_2
+common_conditions[which(!common_conditions%in%more_common_coditions)] = NA
+common_conditions[which(common_conditions == "Healthy")] = NA
+ov2_metadata_ordered$common_conditions = common_conditions
+
+## now lets visualize the UMAP based on different metadata
+#### so there are too many ecologies. we will have to break it up
+human_only_ecology = ov2_metadata_ordered$ecology
+non_human_ecologies = c("aquatic-sediment","aquatic","terrestrial-soil","mouse","cow","chicken","plants","rhizosphere","moose","glacier-or-permafrost","coral-reef")
+for(x in non_human_ecologies) {
+  human_only_ecology[human_only_ecology==x] = NA
+}
+## 
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_human_microbiome_transparent.pdf")
+visualize_umap_clusters(UMAP_embeddings,human_only_ecology) # only one that clusters every point. silhouette is 0.6278515 on average
+dev.off()
+## now do the same thing for environmental samples
+env_only_ecology = ov2_metadata_ordered$ecology
+non_environment_ecologies = setdiff(unique(ov2_metadata_ordered$ecology),c("aquatic","aquatic-sediment","terrestrial-soil","glacier-or-permafrost"))
+for(x in non_environment_ecologies) {
+  env_only_ecology[env_only_ecology==x] = NA
+}
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_environment_microbiome.pdf")
+visualize_umap_clusters(UMAP_embeddings,env_only_ecology)
+dev.off()
+
+#### now do non-human host
+nonhuman_host_ecology = ov2_metadata_ordered$ecology
+not_non_human_host_ecologies = setdiff(unique(ov2_metadata_ordered$ecology),c("mouse","cow","chicken","plants","rhizosphere","moose","coral-reef"))
+for(x in not_non_human_host_ecologies) {
+  nonhuman_host_ecology[nonhuman_host_ecology==x] = NA
+}
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_nonhuman_host_microbiome.pdf")
+visualize_umap_clusters(UMAP_embeddings,nonhuman_host_ecology) 
+dev.off()
+
+
+## now look at other statistics. 
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_ecology_category.pdf")
+visualize_umap_clusters(UMAP_embeddings,ov2_metadata_ordered$human_env_nonhumanhost) # 
+dev.off()
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_health.pdf")
+visualize_umap_clusters(UMAP_embeddings,ov2_metadata_ordered$health_status) # 
+dev.off()
+
+## look at condition
+visualize_umap_clusters(UMAP_embeddings,ov2_metadata_ordered$condition_2) # 
+visualize_umap_clusters_noNA(UMAP_embeddings,ov2_metadata_ordered$common_conditions) # 
+
+### look at each condition individually
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_colored_by_condition_without_healthy_samples_each_cond_separate2.pdf")
+for(x in unique(ov2_metadata_ordered$common_conditions)) {
+  if(!is.na(x) & x != "Healthy") {
+    print(x)
+    studies_of_interst =  ov2_metadata_ordered[which(ov2_metadata_ordered$condition_2 == x),"study_id"]
+    studies_of_interst = unique(studies_of_interst)
+    print(studies_of_interst)
+    indexes_of_choice = which(ov2_metadata_ordered$study_id%in%studies_of_interst & (ov2_metadata_ordered$condition_2 == x | ov2_metadata_ordered$condition_2 == "Healthy"))
+    myconditions_temp = ov2_metadata_ordered$condition_2
+    myconditions_temp[-indexes_of_choice] = NA
+    graph_df_temp = cbind(as.data.frame(UMAP_embeddings[,c(1,2)]),as.factor(myconditions_temp))
+    colnames(graph_df_temp) = c("x","y","condition")
+    graph_df_temp$shape = ov2_metadata_ordered$study_id
+    graph_df_temp$shape[(is.na(graph_df_temp$condition))] = "NA"
+    graph_df_temp$shape = as.factor(graph_df_temp$shape)
+    
+    graph_df_temp$alpha = rep("circle",nrow(graph_df_temp))
+    graph_df_temp$alpha[(is.na(graph_df_temp$condition))] = "NA"
+    graph_df_temp$alpha = as.factor(graph_df_temp$alpha)
+
+    
+    shape_man_vec = seq(15,length(levels(graph_df_temp$shape))+15)
+    names(shape_man_vec) = levels(graph_df_temp$shape)
+    shape_man_vec[names(shape_man_vec) == "NA"] = 1
+
+    myplot_temp = ggplot(graph_df_temp, aes(x=x, y=y,color=condition)) + geom_point(aes(shape=shape,alpha=alpha),size=1) + scale_shape_manual(values=shape_man_vec) + scale_alpha_manual(values=c(0.5,0.1)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black"))
+  print(myplot_temp)
+  }
+}
+dev.off()
+
+
+
+
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_age.pdf")
+visualize_umap_clusters(UMAP_embeddings,ov2_metadata_ordered$age) # 
+dev.off()
+## color by industrialization
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_industrialization.pdf")
+visualize_umap_clusters(UMAP_embeddings,ov2_metadata_ordered$westernized) # 
+dev.off()
+
+
+### look for read count
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_read_num.pdf")
+visualize_umap_clusters_continuous(UMAP_embeddings,ov2_metadata_ordered$Total.Read.Count) # 
+dev.off()
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_consensus_gene_num.pdf")
+visualize_umap_clusters_continuous(UMAP_embeddings,ov2_metadata_ordered$clustered_30perc_gene_number) #
+dev.off()
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_raw_gene_num.pdf")
+visualize_umap_clusters_continuous(UMAP_embeddings,ov2_metadata_ordered$raw_orf_count) # 
+dev.off()
+
+study_ID = ov2_metadata_ordered$study_id
+study_ID[ov2_metadata_ordered$human_env_nonhumanhost!= "HUMAN"] = NA
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_ecology_colored_by_study.pdf",width=18)
+visualize_umap_clusters(UMAP_embeddings,study_ID) # 
+dev.off()
+
+### add cluster IDs to metadata
+metadata_with_cluster_ID = cbind(ov2_metadata_ordered,cluster=cluster_labels$cluster)
+## make plots to characterize the clusters and see what ecologies were in what clusters
+ecology_counts = table(ov2_metadata_ordered$ecology)
+healthy_counts = table(ov2_metadata_ordered$healthy)
+western_counts = table(ov2_metadata_ordered$westernized)
+cluster_counts = table(metadata_with_cluster_ID$cluster)
+condition_counts = table(metadata_with_cluster_ID$common_conditions)
+
+age_counts = table(metadata_with_cluster_ID$age)
+
+metadata_with_cluster_ID = as.data.table(metadata_with_cluster_ID)
+metadata_with_cluster_ID$cluster = as.factor(metadata_with_cluster_ID$cluster)
+ecology_sapmle_num_by_cluster=metadata_with_cluster_ID[,.(N=length(unique(prokka_id))),by=.(cluster,ecology)]
+ecology_sapmle_num_by_cluster[,proportion_of_ecology_samples_per_cluster:= ecology_sapmle_num_by_cluster$N/ as.numeric(ecology_counts[match(ecology_sapmle_num_by_cluster$ecology,names(ecology_counts))])]
+ecology_sapmle_num_by_cluster[,proportion_of_cluster_samples_per_ecology:= ecology_sapmle_num_by_cluster$N/ as.numeric(cluster_counts[match(ecology_sapmle_num_by_cluster$cluster,names(cluster_counts))])]
+
+ecology_sapmle_num_by_cluster = ecology_sapmle_num_by_cluster %>% group_by(ecology) %>% mutate(total = sum(N))
+ecology_sapmle_num_by_cluster$ecology = fct_reorder(ecology_sapmle_num_by_cluster$ecology ,ecology_sapmle_num_by_cluster$total)
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_each_ecology_in_each_cluster.pdf",width=12,height=6)
+ggplot(ecology_sapmle_num_by_cluster,aes(ecology,y=proportion_of_ecology_samples_per_cluster,fill=cluster)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) + ylim(0,1)+
+  geom_text(
+    aes(label = total, group = ecology), 
+    stat = 'summary', fun = sum, vjust = -1
+  )
+dev.off()
+
+ecology_sapmle_num_by_cluster=as.data.table(ecology_sapmle_num_by_cluster)
+for (x in unique(ecology_sapmle_num_by_cluster$cluster)) {
+  temp_data = ecology_sapmle_num_by_cluster[cluster == x]
+  pdf(paste("proportion_of_each_cluster_samples_per_ecology/umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_cluster_",x,".pdf",sep=""),width=18)
+  temp_plt= ggplot(temp_data,aes(x=ecology,y=proportion_of_cluster_samples_per_ecology)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) + ylim(0,1)
+  print(temp_plt)
+  dev.off()
+}
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_each_cluster_per_ecology.pdf")
+ggplot(ecology_sapmle_num_by_cluster,aes(x=cluster,y=proportion_of_cluster_samples_per_ecology,fill=ecology)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+dev.off()
+
+### Now make graphs for disease!
+
+disease_sapmle_num_by_cluster=metadata_with_cluster_ID[,.(N=length(unique(prokka_id))),by=.(cluster,healthy)]
+
+disease_sapmle_num_by_cluster[,proportion_of_disease_samples_per_cluster:= disease_sapmle_num_by_cluster$N/ as.numeric(healthy_counts[match(disease_sapmle_num_by_cluster$healthy,names(healthy_counts))])]
+disease_sapmle_num_by_cluster[,proportion_of_cluster_samples_per_healthstat:= disease_sapmle_num_by_cluster$N/ as.numeric(cluster_counts[match(disease_sapmle_num_by_cluster$cluster,names(cluster_counts))])]
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_each_healthy_disease_sample_in_each_cluster.pdf")
+ggplot(disease_sapmle_num_by_cluster,aes(x=healthy,y=proportion_of_disease_samples_per_cluster,fill=cluster)) +  geom_bar(stat="identity")+ scale_fill_manual(values = c('#bbbbbb','#fcf7b5','#bebadb','#f37e73','#80b1d4','#fcb362','#b4d66b','#3333ff')) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+dev.off()
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_each_cluster_disease_sample.pdf")
+ggplot(disease_sapmle_num_by_cluster,aes(x=cluster,y=proportion_of_cluster_samples_per_healthstat,fill=healthy)) + geom_bar(stat="identity")+ scale_fill_manual(values = c('#bbbbbb','#fcf7b5','#bebadb','#f37e73','#80b1d4','#fcb362','#b4d66b','#3333ff')) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+dev.off()
+
+### now do the same for age
+
+age_sapmle_num_by_cluster=metadata_with_cluster_ID[,.(N=.N),by=.(cluster,age)]
+
+age_sapmle_num_by_cluster[,proportion_of_age_samples_per_cluster:= age_sapmle_num_by_cluster$N/ as.numeric(age_counts[match(age_sapmle_num_by_cluster$age,names(age_counts))])]
+age_sapmle_num_by_cluster[,proportion_of_cluster_samples_per_age:= age_sapmle_num_by_cluster$N/ as.numeric(cluster_counts[match(age_sapmle_num_by_cluster$cluster,names(cluster_counts))])]
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_age_sample_per_cluster.pdf")
+ggplot(age_sapmle_num_by_cluster,aes(x=age,y=proportion_of_age_samples_per_cluster,fill=cluster)) +  geom_bar(stat="identity") #+ scale_fill_manual(values = c('#bbbbbb','#fcf7b5','#bebadb','#f37e73','#80b1d4','#fcb362','#b4d66b',''#3333ff')) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+dev.off()
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_cluster_per_age.pdf")
+ggplot(age_sapmle_num_by_cluster,aes(x=cluster,y=proportion_of_cluster_samples_per_age,fill=age)) +  geom_bar(stat="identity") 
+dev.off()
+
+### now make plots for westernization
+western_sapmle_num_by_cluster=metadata_with_cluster_ID[,.(N=.N),by=.(cluster,westernized)]
+
+western_sapmle_num_by_cluster[,proportion_of_western_samples_per_cluster:= western_sapmle_num_by_cluster$N/ as.numeric(western_counts[match(western_sapmle_num_by_cluster$westernized,names(western_counts))])]
+western_sapmle_num_by_cluster[,proportion_of_cluster_samples_per_western:= western_sapmle_num_by_cluster$N/ as.numeric(cluster_counts[match(western_sapmle_num_by_cluster$cluster,names(cluster_counts))])]
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_inustry_sample_per_cluster.pdf")
+ggplot(western_sapmle_num_by_cluster,aes(x=westernized,y=proportion_of_western_samples_per_cluster,fill=cluster)) +  geom_bar(stat="identity") 
+dev.off()
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_cluster_per_industry.pdf")
+ggplot(western_sapmle_num_by_cluster,aes(x=cluster,y=proportion_of_cluster_samples_per_western,fill=westernized)) +  geom_bar(stat="identity") 
+dev.off()
+
+
+### make plots by common condition
+
+condition_sapmle_num_by_cluster=metadata_with_cluster_ID[,.(N=.N),by=.(cluster,common_conditions)]
+
+condition_sapmle_num_by_cluster[,proportion_of_condition_samples_per_cluster:= condition_sapmle_num_by_cluster$N/ as.numeric(condition_counts[match(condition_sapmle_num_by_cluster$common_conditions,names(condition_counts))])]
+condition_sapmle_num_by_cluster[,proportion_of_cluster_samples_per_condition:= condition_sapmle_num_by_cluster$N/ as.numeric(cluster_counts[match(condition_sapmle_num_by_cluster$cluster,names(cluster_counts))])]
+
+condition_sapmle_num_by_cluster = condition_sapmle_num_by_cluster %>% group_by(common_conditions) %>% mutate(total = sum(N,na.rm=TRUE))
+condition_sapmle_num_by_cluster$common_conditions = fct_reorder(condition_sapmle_num_by_cluster$common_conditions ,condition_sapmle_num_by_cluster$total)
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_each_condition_per_cluster.pdf",width=12,height=6)
+ggplot(condition_sapmle_num_by_cluster,aes(x=common_conditions,y=proportion_of_condition_samples_per_cluster,fill=cluster)) +  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=-1))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) + ylim(0,1)+geom_text(
+    aes(label = total, group = common_conditions), 
+    stat = 'summary', fun = sum, vjust = -1
+  )
+dev.off()
+
+pdf("umap_50PCs_colscaled_2components_minclust50_10neighbors_0.1dist_barplot_proportion_of_each_cluster_per_condition.pdf")
+ggplot(condition_sapmle_num_by_cluster,aes(x=cluster,y=proportion_of_cluster_samples_per_condition,fill=common_conditions)) +  geom_bar(stat="identity") 
+dev.off()
+
+```
+
+##Now lets make UMAP and visualize sub clusters
+
+```{r}
+library(umap)
+library(ggplot2)
+visualize_umap_clusters_no_legend = function(umap_embeddings,clusterLabels) {
+  
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+
+  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape),size=.8,alpha=.9) + scale_shape_manual(values=c(16,16)) + scale_alpha_manual(values=c(0.5,0.5)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black")) +xlab("") + ylab("") + theme(legend.position = "none")
+    return(myplot)
+}
+
+visualize_umap_clusters_with_legend = function(umap_embeddings,clusterLabels) {
+  
+  umap_embeddings = as.data.frame(umap_embeddings)
+  mydf = cbind(umap_embeddings[,c(1,2)],as.factor(clusterLabels))
+  mydf = as.data.frame(mydf)
+  colnames(mydf) = c("x","y","cluster")
+  mydf$shape = rep("circle",nrow(mydf))
+  mydf$shape[(is.na(mydf$cluster))] = "NA"
+  mydf$shape = as.factor(mydf$shape)
+
+  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape),size=.8,alpha=.9) + scale_shape_manual(values=c(16,16)) + scale_alpha_manual(values=c(0.5,0.5)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black")) +xlab("") + ylab("") #+ theme(legend.position = "none")
+    return(myplot)
+}
+
+
+
+build_UMAPS = function(working_dir,cluster_num) {
+  setwd(working_dir)
+  myTab_50pcs = read.table(paste("multi_map_30_collapsed_processed_cluster",cluster_num,"samples_50PCs_v2_min_prevalence0.txt",sep=""),sep="\t",header=F)
+
+  # get sample names
+  sample_names_50pcs = myTab_50pcs[,1]
+
+  # remove sample name column from matrix
+  myTab_50pcs = myTab_50pcs[,-1]
+
+  ### scale SVD before continuing
+  # z-score normalize each PC in matrix
+  myTab_50pcs_col_normalized = scale(myTab_50pcs, center = TRUE, scale = TRUE)
+  myTab_50pcs_col_normalized = as.data.frame(myTab_50pcs_col_normalized)
+  
+  umap_50PCs_res = umap(myTab_50pcs_col_normalized,n_neighbors=10,min_dist=0.1,n_components=2,random_state=42)
+  
+  metadata = read.csv("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/human_env_metadata_march_22_2021.csv")
+  metadata_50pc_order = metadata[match(sample_names_50pcs,metadata$prokka_id),]
+  
+  #### so there are too many ecologies. we will have to break it up
+  human_only_ecology_temp = metadata_50pc_order$ecology
+  non_human_ecologies = c("aquatic-sediment","aquatic","terrestrial-soil","mouse","cow","chicken","plants","rhizosphere","moose","glacier-or-permafrost","coral-reef")
+  human_only_ecology_temp[human_only_ecology_temp%in%non_human_ecologies] = NA
+  metadata_50pc_order = cbind(metadata_50pc_order,human_only_ecology=human_only_ecology_temp)
+  
+  
+  metadata_col_names = c("human_only_ecology","health_status","age","westernized")
+  
+  plot_UMAPs = function(umap_temp, my_metadata,metadata_col_name,cluster_num) {
+    ggplot_50PCs_nolegend = visualize_umap_clusters_no_legend(umap_temp$layout,my_metadata[,metadata_col_name])
+    ggplot_50PCs_withlegend = visualize_umap_clusters_with_legend(umap_temp$layout,my_metadata[,metadata_col_name])
+    pdf(paste("ggplots_cluster_NO_legend",cluster_num,"_50PCs_",metadata_col_name,"_minclust_v2.pdf",sep=""))
+    print(ggplot_50PCs_nolegend)
+    dev.off()
+    pdf(paste("ggplots_cluster_YES_legend",cluster_num,"_50PCs_",metadata_col_name,"_minclust_v2.pdf",sep=""))
+    print(ggplot_50PCs_withlegend)
+    dev.off()
+  }
+  
+  sapply(metadata_col_names,function(mycol) plot_UMAPs(umap_temp=umap_50PCs_res,my_metadata=metadata_50pc_order,metadata_col_name = mycol,cluster_num=cluster_num))
+}
+
+build_UMAPS(working_dir="~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/cluster7_recluster/",cluster_num=7)
+build_UMAPS(working_dir="~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/cluster3_recluster/",cluster_num=3)
+build_UMAPS(working_dir="~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/cluster2_recluster/",cluster_num=2)
+build_UMAPS(working_dir="~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/cluster4_recluster/",cluster_num=4)
+
+
+```

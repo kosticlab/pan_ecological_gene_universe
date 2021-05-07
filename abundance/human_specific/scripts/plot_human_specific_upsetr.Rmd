@@ -1,0 +1,24 @@
+---
+title: "plot_genes_more_abundant_in_humans"
+author: "Sam Zimmerman"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figure5_human_specific_universal_genes/human_vs_non_gut_ecologies")
+```
+
+Create upsetr plot
+
+```{r}
+library(UpSetR)
+binary_mat = read.table("sig_genes_binary_mat_human_vs_non_gut.txt",sep="\t",header=T,row.names=1)
+pdf("figures/human_gene_vs_non_gut_intersections_upsetr.pdf",width=18)
+upset(binary_mat, nsets=6,nintersects=NA,order.by="freq")
+dev.off()
+```

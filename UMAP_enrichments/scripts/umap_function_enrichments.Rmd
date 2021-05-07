@@ -1,0 +1,108 @@
+---
+title: "umap_function_enrichments.Rmd"
+author: "Braden T Tierney"
+date: "2/27/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+outplots = list()
+```
+
+
+```{r}
+#protein
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+cluster1 =  read.csv('cluster1_gene_annotations/cluster1_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts)) %>% head(25)
+cluster1$protein=fct_reorder(cluster1$protein,abs(cluster1$odds_ratio))
+p1 = ggplot(cluster1,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('')  
+ggsave(width=9,height=9,'protein_cluster1.pdf')
+
+cluster2 =  read.csv('cluster2_gene_annotations/cluster2_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% head(25)
+cluster2$protein=fct_reorder(cluster2$protein,abs(cluster2$odds_ratio))
+p2= ggplot(cluster2,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') 
+ggsave(width=9,height=9,'protein_cluster2.pdf')
+
+cluster3 =  read.csv('cluster3_gene_annotations/cluster3_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% head(25)
+cluster3$protein=fct_reorder(cluster3$protein,abs(cluster3$odds_ratio))
+p3= ggplot(cluster3,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') 
+ggsave(width=9,height=9,'protein_cluster3.pdf')
+
+cluster4 =  read.csv('cluster4_gene_annotations/cluster4_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% head(25)
+cluster4$protein=fct_reorder(cluster4$protein,abs(cluster4$odds_ratio))
+p4 = ggplot(cluster4,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') 
+ggsave(width=9,height=9,'protein_cluster4.pdf')
+
+cluster5 =  read.csv('cluster5_gene_annotations/cluster5_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% head(25)
+cluster5$protein=fct_reorder(cluster5$protein,abs(cluster5$odds_ratio))
+p5 = ggplot(cluster5,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') 
+ggsave(width=9,height=9,'protein_cluster5.pdf')
+
+cluster6 =  read.csv('cluster6_gene_annotations/cluster6_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% head(25)
+cluster6$protein=fct_reorder(cluster6$protein,abs(cluster6$odds_ratio))
+p6 = ggplot(cluster6,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') 
+ggsave(width=9,height=9,'protein_cluster6.pdf')
+
+cluster7 =  read.csv('cluster7_gene_annotations/cluster7_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% arrange(desc(present_group_interest_counts))  %>% head(25)
+cluster7$protein=fct_reorder(cluster7$protein,abs(cluster7$odds_ratio))
+p7 = ggplot(cluster7,aes(x=protein,y=log(odds_ratio)))+geom_bar(stat='identity') + geom_errorbar(aes(ymin=log(lower95_CI), ymax=log(upper95_CI)), width=.2, position=position_dodge(.9))+ coord_flip()+xlab('') 
+ggsave(width=9,height=9,'protein_cluster7.pdf')
+
+
+```
+
+```{r}
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+pdf('enrichment_plots_protein.pdf',width=40,height=18)
+plot_grid(p1,p2,p3,p4,p5,p6,p7,ncol=3,align = 'v')
+dev.off() 
+
+```
+
+```{r}
+#histograms of odds ratios
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+#protein
+c1p = read.csv('cluster1_gene_annotations/cluster1_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c2p = read.csv('cluster2_gene_annotations/cluster2_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c3p = read.csv('cluster3_gene_annotations/cluster3_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c4p = read.csv('cluster4_gene_annotations/cluster4_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+c5p = read.csv('cluster5_gene_annotations/cluster5_protein_enrichments.txt',sep='\t',quote="") %>% filter(fdr<0.05) %>% mutate(log_odds_ratio = log(odds_ratio)) %>% select(log_odds_ratio) 
+
+
+g1 = ggplot(c1p, aes(log_odds_ratio)) +geom_histogram() + xlab('') + ylab('')+ xlim(-10,10) +ylim(0,700)
+g2 = ggplot(c2p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('')+ xlim(-10,10) +ylim(0,700)
+g3 = ggplot(c3p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('')+ xlim(-10,10) +ylim(0,700)
+g4 = ggplot(c4p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('')+ xlim(-10,10) +ylim(0,700)
+g5 = ggplot(c5p, aes(log_odds_ratio)) +geom_histogram()+ xlab('') + ylab('')+ xlim(-10,10) +ylim(0,700)
+
+pdf('hist_odds_ratio_enrichment_plots_protein.pdf',width=16,height=4)
+plot_grid(g1,g2,g3,g4,g5,ncol=5,align = 'v')
+dev.off() 
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

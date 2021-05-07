@@ -1,0 +1,163 @@
+---
+title: "conserved_intersection_genes_prevalence"
+author: "Sam Zimmerman"
+date: "3/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Now we are going to make plots to show prevalence of globally conserved genes
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(forcats)
+library(cowplot)
+library(ggtext)
+theme_set(theme_cowplot())
+
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/')
+
+###GET TOP GENERA AND PHYLA FOR CONSERVED GENES
+cg_p_s = read_excel('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figures/global_conserved_genes_prevalence_GTDB_annotated.xls')  %>% filter(phylum != 'NA',class != 'NA') %>% select(phylum,class,GTDBgene) %>% mutate(GTDBgene = if_else(GTDBgene == 'NA',0,1))
+
+conserved_taxa = cg_p_s %>% filter(GTDBgene == 0) %>% select(phylum, class)  %>% group_by(phylum,class) %>% count %>% arrange(desc(n)) %>% mutate(category = 'This study')
+
+conserved_taxa$class = fct_reorder(conserved_taxa$class,conserved_taxa$n)
+
+ggplot(conserved_taxa %>% filter(n>3),aes(x=class,y=n,fill=phylum,group=category)) + geom_bar(stat='identity') + coord_flip()
+
+ggsave('conserved_taxa.pdf',width=6,height=6)
+
+gt_taxa = cg_p_s %>% filter(GTDBgene == 1) %>% select(phylum, class)  %>% group_by(phylum,class) %>% count %>% arrange(desc(n))%>% mutate(category = 'GTDB')
+
+gt_taxa$class = fct_reorder(gt_taxa$class,gt_taxa$n)
+
+ggplot(gt_taxa %>% filter(n>3),aes(x=class,y=n,fill=phylum,group=category)) + geom_bar(stat='identity') + coord_flip()
+
+ggsave('gtdb_taxa.pdf',width=6,height=6)
+
+###comparing gtdb functions
+
+cg_gt_fx = read_excel('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figures/global_conserved_genes_prevalence_GTDB_annotated.xls')  %>% select(gene_name,V4,prokka_protein_name,GTDBgene)
+
+cg_fx = cg_gt_fx %>% filter(GTDBgene!='NA')
+
+gt_fx = cg_gt_fx %>% filter(GTDBgene=='NA')
+
+sample_annotations = read.csv("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/human_env_metadata_march_22_2021.csv",header=T,quote="")
+# get samples per ecosystem
+samples_per_ecosystem = table(sample_annotations$ecology)
+names(samples_per_ecosystem) = toupper(names(samples_per_ecosystem))
+
+# read in conserved gene prevalence data
+global_conserved_genes_prevalence_by_ecosystem = fread("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/global_conserved_genes_prevalence_by_ecosystem.txt",header=T,sep="\t")
+global_conserved_genes_prevalence_by_gene = fread("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/global_conserved_genes_prevalence_by_gene.txt",header=T,sep="\t")
+# get categories for each sample type
+sample_categories = read.table("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/sample_to_categories_conserved_genes.txt",sep="\t",header=T)
+
+
+# get proportion of genes in samples and ecology
+global_conserved_genes_samples_per_ecosystem = samples_per_ecosystem[match(global_conserved_genes_prevalence_by_ecosystem$ecology,names(samples_per_ecosystem))]
+global_conserved_genes_prevalence_by_ecosystem[, frac := global_conserved_genes_prevalence_by_ecosystem$prev/global_conserved_genes_samples_per_ecosystem]
+# get proportion of genes in each sample
+global_conserved_genes_prevalence_by_gene[, frac := global_conserved_genes_prevalence_by_gene$prev/nrow(sample_annotations)]
+
+global_conserved_genes_prevalence_by_gene_DF = as.data.frame(global_conserved_genes_prevalence_by_gene)
+global_conserved_genes_prevalence_by_gene_DF$V1 <- factor(global_conserved_genes_prevalence_by_gene_DF$V1,levels = global_conserved_genes_prevalence_by_gene_DF$V1[order(global_conserved_genes_prevalence_by_gene_DF$frac,decreasing=TRUE)])
+
+
+######MERGE IN GTDBTK RESULTS 
+
+gtdbtk_annotations = read.csv('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/gtdbtk_aligned_genes.csv') %>% filter(!is.na(GTDBgene))
+
+global_conserved_genes_prevalence_by_gene_DF = left_join(global_conserved_genes_prevalence_by_gene_DF,gtdbtk_annotations,by=c('V1'='V2'))  %>% mutate(GTDBgene = if_else(is.na(GTDBgene),0,1))
+
+global_conserved_genes_prevalence_by_gene_DF$V1 = fct_reorder(global_conserved_genes_prevalence_by_gene_DF$V1,desc(global_conserved_genes_prevalence_by_gene_DF$frac))
+
+### make a plot of prevalence for global conserved genes. do first by gene. 
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/global_conserved_genes_prevalence.pdf",width=6)
+ggplot(data=global_conserved_genes_prevalence_by_gene_DF,aes(x=V1, y=frac,fill=as.factor(GTDBgene)))+ scale_fill_manual(values=c("#999999", "#56B4E9")) + geom_bar(stat="identity") + theme(axis.ticks.x = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "genes",y="proportion of samples") + geom_hline(yintercept=median(global_conserved_genes_prevalence_by_gene_DF$frac),color = "red")+theme(axis.title.x=element_blank(),axis.text.x=element_blank(),axis.ticks.x=element_blank())
+dev.off()
+# plot histogram of prevalence for global conserved genes.
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/global_conserved_genes_prevalence_hist.pdf",width=18)
+hist(global_conserved_genes_prevalence_by_gene_DF$frac,xlab=c("proportion of samples"),ylab="frequency")
+dev.off()
+
+
+####MERGE IN GTDB data
+
+gtdb_prev = read.csv('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gtdb_tk_prevalence/prevalence_all_samples.txt',sep='\t')
+
+ourstudy = global_conserved_genes_prevalence_by_gene_DF %>% select(frac) %>% mutate(dset = 'This study')
+
+gt = gtdb_prev %>% select(fraction) %>% mutate(dset = 'GTDB') %>% rename(frac=fraction)
+
+prevdata_boxplot = bind_rows(ourstudy,gt)
+
+
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/global_conserved_genes_prevalence_boxplot.pdf",width=4)
+ggplot(prevdata_boxplot,aes(y=frac,x=dset)) + geom_boxplot() 
+dev.off()
+
+### now do a boxplot where each point is the proportion of samples a conserved gene was in for a specific ecosystem
+
+# first I am going to get the order of the boxplot x axis
+#global_conserved_genes_prevalence_by_ecosystem_median_frac = global_conserved_genes_prevalence_by_ecosystem[,.(median(frac)),by=ecology]
+#global_conserved_genes_prevalence_by_ecosystem_median_frac = global_conserved_genes_prevalence_by_ecosystem_median_frac[order(global_conserved_genes_prevalence_by_ecosystem_median_frac$V1,decreasing = T)]
+#global_conserved_genes_prevalence_by_ecosystem$ecology <- factor(global_conserved_genes_prevalence_by_ecosystem$ecology,levels = global_conserved_genes_prevalence_by_ecosystem_median_frac$ecology)
+
+# change labels to match my other plots
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="GUT"] = "human_gut"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="NASAL"] = "nasal"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="ORAL"] = "human_oral"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="VAGINAL"] = "vaginal"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="AQUATIC"] = "aquatic"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="MOUSE"] = "mice"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="SKIN"] = "skin"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="AIRWAYS"] = "airways"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="AQUATIC-SEDIMENT"] = "aquatic_sediment"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="PLANTS"] = "phyllosphere"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="RHIZOSPHERE"] = "rhizosphere"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="CORAL-REEF"] = "coral"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="CHICKEN"] = "chicken_ceceum"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="TERRESTRIAL-SOIL"] = "soil"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="MOOSE"] = "moose"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="COW"] = "cow"
+global_conserved_genes_prevalence_by_ecosystem$ecology[global_conserved_genes_prevalence_by_ecosystem$ecology=="GLACIER-OR-PERMAFROST"] = "glacier_permafrost"
+# add category column
+global_conserved_genes_prevalence_by_ecosystem[,category := sample_categories[match(global_conserved_genes_prevalence_by_ecosystem$ecology,sample_categories$sample_type),"category"]]
+
+
+sample_order_df = sample_categories[order(sample_categories$category),]
+sample_order = sample_order_df$sample_type
+global_conserved_genes_prevalence_by_ecosystem$ecology <- factor(global_conserved_genes_prevalence_by_ecosystem$ecology,levels = sample_order)
+global_conserved_genes_prevalence_by_ecosystem$frac= as.numeric(global_conserved_genes_prevalence_by_ecosystem$frac)
+
+
+# I want to color the plot by category
+library(RColorBrewer)
+myCols = brewer.pal(n=length(unique(sample_categories$category)), name="Dark2")
+names(myCols) = unique(sample_categories$category)
+myCols_ordered = myCols[match(sample_order_df$category,names(myCols))]
+# now make the boxplot
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/global_conserved_genes_prevalence_per_ecosystem.pdf",width=18)
+ggplot(data=global_conserved_genes_prevalence_by_ecosystem,aes(x=ecology, y=frac)) + geom_boxplot(aes(fill=category)) + theme(axis.text.x = element_text(angle = 75,vjust=0.5),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecosystem",y="proportion of samples in an ecosystem") + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+dev.off()
+
+#pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/global_conserved_genes_prevalence_per_ecosystem.pdf",width=18)
+#ggplot(data=global_conserved_genes_prevalence_by_ecosystem,aes(x=ecology, y=frac)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 45,vjust=0.5),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecosystem",y="proportion of samples in an ecosystem")
+#dev.off()
+
+# now do a histogram version
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/global_conserved_genes_prevalence_per_ecosystem_hist.pdf",width=18,height=18)
+ggplot(data=global_conserved_genes_prevalence_by_ecosystem,aes(x=frac)) + geom_histogram() + theme(axis.text.x = element_text(angle = 45,vjust=0.5),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "proportion of samples in an ecosystem",y="frequency") + facet_grid(rows = vars(ecology),scales = "free_x")
+dev.off()
+
+```
+

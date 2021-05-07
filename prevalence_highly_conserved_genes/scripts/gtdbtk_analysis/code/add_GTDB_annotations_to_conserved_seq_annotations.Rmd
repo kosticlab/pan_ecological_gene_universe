@@ -1,0 +1,50 @@
+---
+title: "add_GTDB_annotations_to_conserved_seq_annotations"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Now I am going to add some more columns to the annotation table so we can see which are annotated to GTDB genes and which are not
+
+```{r}
+library(data.table)
+global_conserved_genes_prevalence_ordered = fread("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/global_conserved_gene_functions/global_conserved_genes_prevalence_annotated.txt")
+
+aligned_bac120_files= list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes",full.names = T,pattern = "_prev.txt")
+
+aligned_bac120 = lapply(aligned_bac120_files, function(x) {
+  mycmd = paste("grep -v '#'",x,"| awk -F ' ' '{print $1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10}'")
+  myTab = fread(cmd=mycmd,header=F,sep=" ")
+  return(myTab)
+})
+# take best hit
+aligned_bac120_align_status = lapply(aligned_bac120, function(x) {
+  if(nrow(x) >0) {
+    best_alignment_index = which.min(x$V5)
+    alignment_status = rep("secondary_alignment",nrow(x))
+    alignment_status[best_alignment_index] = "primary_alignment"
+    x$alignment_status = alignment_status
+  }
+  return(x)
+})
+aligned_bac120_dt = do.call("rbind",aligned_bac120_align_status)
+# sort by pvalue. I am doing this because I want the first match to of each gene to be the one with the highest pvalue
+aligned_bac120_dt_pval_order = aligned_bac120_dt[order(aligned_bac120_dt$V5),]
+
+aligned_bac120_dt_pval_order_conserved_gene_order = aligned_bac120_dt_pval_order[match(global_conserved_genes_prevalence_ordered$V2,aligned_bac120_dt_pval_order$V1),]
+# now add to the annotation table
+global_conserved_genes_prevalence_ordered$GTDBgene = aligned_bac120_dt_pval_order_conserved_gene_order$V3
+global_conserved_genes_prevalence_ordered$GTDB_alignment_status = aligned_bac120_dt_pval_order_conserved_gene_order$alignment_status
+global_conserved_genes_prevalence_ordered$evalue = aligned_bac120_dt_pval_order_conserved_gene_order$V5
+
+## get the rank of genes annotated to GTDB genes
+which(!is.na(global_conserved_genes_prevalence_ordered$GTDBgene))
+# change column header of V5
+colnames(global_conserved_genes_prevalence_ordered)[8] = "prokka_protein_name"
+write.table(global_conserved_genes_prevalence_ordered,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/global_conserved_gene_functions/global_conserved_genes_prevalence_GTDB_annotated.txt",sep="\t",quote=F,col.names=T,row.names=F)
+```

@@ -1,0 +1,104 @@
+---
+title: "get_global_conserved_gene_prevalence_each_ecology"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Next get the functions of the 1,800 genes and there prevalence in each ecology
+
+```{r}
+library(data.table)
+library(cowplot)
+library(ggplot2)
+## get annotations of all consensus genes 
+consensus_seq_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt | grep -v 'ftype'"),header=F)
+setkey(consensus_seq_annotations,V1)
+### now get list of globally conserved consensus genes
+global_conserved_genes = read.table("/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES",sep="\t")
+global_conserved_genes_geneNames = sapply(strsplit(global_conserved_genes[,1],split="_"), function(x) paste(x[-1],collapse="_"))
+table(global_conserved_genes_geneNames%in%consensus_seq_annotations$V1) # all true. great
+## now subset the data table to only have conserved genes
+consensus_seq_annotations_global_conserved = consensus_seq_annotations[global_conserved_genes_geneNames]
+## get annotations for EC numbers and COGs
+cog_funcs = fread("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/cog-20.def.tab",header=FALSE,data.table = F)
+cog_category = read.table("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/fun-20.tab",header=F,sep="\t")
+EC_desc = read.table("/n/data1/joslin/icrb/kostic/szimmerman/all_EC_to_desc.txt",sep="\t",quote="")
+
+## first get EC number annotations
+EC_description_consensus_seq = EC_desc[match(consensus_seq_annotations_global_conserved$V5,EC_desc$V1),2]
+## now get COG descriptions
+cog_funcs_consensus_seq = cog_funcs[match(consensus_seq_annotations_global_conserved$V6,cog_funcs$V1),]
+cog_cat_description_vec = sapply(strsplit(cog_funcs_consensus_seq$V2,split=""),function(x) paste(cog_category[match(x,cog_category[,1]),3],collapse="-"))
+
+
+### lets rank genes by prevalence
+global_conserved_genes_raw_ecology = fread(cmd='cut -d "_" -f 1 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING',header=F)
+global_conserved_genes_raw_sample = fread(cmd='cut -d "_" -f 2 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING',header=F)
+global_conserved_genes_prev = fread(cmd='cut -d $"\t" -f 2 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING',header=F)
+# combine the 3 data tables together
+global_conserved_genes_prev[, `:=`(ecology = global_conserved_genes_raw_ecology$V1,
+                            sample = global_conserved_genes_raw_sample$V1)]
+colnames(global_conserved_genes_prev)[1] = "V2"
+
+## read in metadata of samples
+ov2_metadata_ordered = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_march_22_2021.csv")
+## get number of samples in each ecology
+num_samples_per_ecology = table(ov2_metadata_ordered$ecology)
+names(num_samples_per_ecology) = toupper(names(num_samples_per_ecology))
+## find proportion of samples in each ecology the consensus gene is in 
+global_conserved_genes_prevalence_each_ecology = global_conserved_genes_prev[,length(unique(sample)),by=.(V2,ecology)]
+num_samples_per_ecology_ordered = num_samples_per_ecology[match(global_conserved_genes_prevalence_each_ecology$ecology,names(num_samples_per_ecology))]
+global_conserved_genes_prevalence_each_ecology[, "proportion_of_samples" := V1/as.numeric(num_samples_per_ecology_ordered)]
+### convert data.table to data.frame 
+global_conserved_genes_prevalence_each_ecology_wide = dcast(global_conserved_genes_prevalence_each_ecology,V2~ecology,value.var="proportion_of_samples")
+global_conserved_genes_prevalence_each_ecology_wide = as.data.frame(global_conserved_genes_prevalence_each_ecology_wide)
+rownames(global_conserved_genes_prevalence_each_ecology_wide) = global_conserved_genes_prevalence_each_ecology_wide[,1]
+global_conserved_genes_prevalence_each_ecology_wide = global_conserved_genes_prevalence_each_ecology_wide[,-1]
+colnames(global_conserved_genes_prevalence_each_ecology_wide) = paste("proportion_",colnames(global_conserved_genes_prevalence_each_ecology_wide),"_samples_prev_in",sep="")
+### now get genes that are in 95% of every sample
+num_ecologies_gt_95perc_prev = apply(global_conserved_genes_prevalence_each_ecology_wide,1, function(x) sum(x>=0.95))
+sum(num_ecologies_gt_95perc_prev == nrow(global_conserved_genes_prevalence_each_ecology_wide)) # 0
+
+## now get prevalence of each gene in all samples together
+sample_num = nrow(ov2_metadata_ordered)
+## get number of samples the representative sequence was in.
+global_conserved_genes_prevalence = global_conserved_genes_prev[,length(unique(sample)),by=V2]
+global_conserved_genes_prevalence[, "proportion_of_total_samples" := V1/sample_num]
+colnames(global_conserved_genes_prevalence)[2] = "number_of_samples"
+### remove ecology from gene ID name
+rep_geneID_no_ecology = tstrsplit(global_conserved_genes_prevalence$V2,split="_",keep=c(2,3),fixed=T)
+rep_geneID_no_ecology = paste(rep_geneID_no_ecology[[1]],rep_geneID_no_ecology[[2]],sep="_")
+
+global_conserved_genes_prevalence[, "geneID" := rep_geneID_no_ecology]
+consensus_seq_annotations_global_conserved_ordered = consensus_seq_annotations_global_conserved[match(global_conserved_genes_prevalence$geneID,consensus_seq_annotations_global_conserved$V1)]
+## add prokka annotations to prevalence table
+global_conserved_genes_prevalence = cbind(global_conserved_genes_prevalence,consensus_seq_annotations_global_conserved_ordered$V4,consensus_seq_annotations_global_conserved_ordered$V5,consensus_seq_annotations_global_conserved_ordered$V6,consensus_seq_annotations_global_conserved_ordered$V7)
+colnames(global_conserved_genes_prevalence)[5] = "gene_name"
+
+### next get COG and EC descriptions
+EC_description_prev_table = EC_desc[match(global_conserved_genes_prevalence$V3,EC_desc$V1),2]
+## now get COG descriptions
+cog_funcs_prev_table = cog_funcs[match(global_conserved_genes_prevalence$V4,cog_funcs$V1),]
+cog_cat_description_vec_prev_table = sapply(strsplit(cog_funcs_prev_table$V2,split=""),function(x) paste(cog_category[match(x,cog_category[,1]),3],collapse="-"))
+
+global_conserved_genes_prevalence[, "EC_desc" := EC_description_prev_table]
+global_conserved_genes_prevalence[, "COG_desc" := cog_funcs_prev_table$V3]
+global_conserved_genes_prevalence[, "COG_cat" := cog_cat_description_vec_prev_table]
+## now add proportion of samples in each ecology
+global_conserved_genes_prevalence_each_ecology_wide_ordered = global_conserved_genes_prevalence_each_ecology_wide[match(global_conserved_genes_prevalence$V2,rownames(global_conserved_genes_prevalence_each_ecology_wide)),]
+global_conserved_genes_prevalence = cbind(global_conserved_genes_prevalence,global_conserved_genes_prevalence_each_ecology_wide_ordered)
+### add taxonomy info
+taxa_data = fread("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",sep="\t",header=T)
+taxa_data_ordered = taxa_data[match(global_conserved_genes_prevalence$geneID,geneName)]
+taxa_data_ordered[,geneName:=NULL]
+taxa_data_ordered[,sample:=NULL]
+
+global_conserved_genes_prevalence = cbind(global_conserved_genes_prevalence,taxa_data_ordered)
+global_conserved_genes_prevalence_ordered = global_conserved_genes_prevalence[order(proportion_of_total_samples,decreasing = T)]
+write.table(global_conserved_genes_prevalence_ordered,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/global_conserved_gene_functions/global_conserved_genes_prevalence_annotated.txt",sep="\t",quote=F,col.names=T,row.names=F)
+```

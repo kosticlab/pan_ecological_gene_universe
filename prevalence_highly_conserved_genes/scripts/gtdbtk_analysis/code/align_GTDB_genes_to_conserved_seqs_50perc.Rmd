@@ -1,0 +1,39 @@
+---
+title: "align_GTDB_genes_to_50perc_conserved_seqs"
+author: "Sam Zimmerman"
+date: "4/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{bash}
+### first extract the names of all the consenus genes
+awk '{print $1'} /n/scratch3/users/b/btt5/orfletonv2/90percclust/GLOBAL-CONSERVATIVE_CONGENES_50 > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/consensus_global_conservative_genes_50perc.txt
+# next extract the sequences from the pan genome file
+sbatch -p short -c 1 -n 1 --mem=100G -t 0-11:59 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/subseq_highly_conserved_consensus_genes_50perc.bash
+# output file is /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/consensus_global_conservative_genes_50perc.faa
+
+# now run alignments
+sbatch -c 5 -p short --mem=30G -t 0-11:59 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/get_bac120_in_conserved_consensus_genes_50perc.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_file_locations.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes_50perc
+
+```
+
+Now combine output of alignments into a single table for consensus sequences
+
+```{r}
+library(data.table)
+aligned_bac120_files= list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes_50perc",full.names = T,pattern = "_prev.txt")
+
+aligned_bac120 = lapply(aligned_bac120_files, function(x) {
+  mycmd = paste("grep -v '#'",x,"| awk -F ' ' '{print $1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10}'")
+  myTab = fread(cmd=mycmd,header=F,sep=" ")
+  return(myTab)
+})
+
+aligned_bac120_df = do.call("rbind",aligned_bac120)
+write.table(aligned_bac120_df,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes_50perc/gtdb_aligned_to_conserved_consensus_genes_50perc.txt",sep="\t",col.names=F,row.names=F,quote=F)
+```
+

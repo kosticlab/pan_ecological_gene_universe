@@ -1,0 +1,32 @@
+---
+title: "conserved_intersection_genes_prevalence"
+author: "Sam Zimmerman"
+date: "3/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I want to get the prevalence of genes but files are too large. So first I need to summarize them on O2
+
+```{r}
+library(data.table)
+# note for users of data.table. For large tables it can be quicker to load them in from stdout in piecemeal fashion
+global_conserved_genes_raw_ecology = fread(cmd='cut -d "_" -f 1 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING',header=F)
+global_conserved_genes_raw_sample = fread(cmd='cut -d "_" -f 2 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING',header=F)
+global_conserved_genes = fread(cmd='cut -d $"\t" -f 2 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING',header=F)
+# combine the 3 data tables together
+global_conserved_genes[, `:=`(ecology = global_conserved_genes_raw_ecology$V1,
+                            sample = global_conserved_genes_raw_sample$V1)]
+
+### get the prevalence of each conserved gene in each ecology
+global_conserved_genes_prevalence_by_ecosystem = global_conserved_genes[,.(prev=length(unique(sample))),by = .(V1, ecology)]
+# get the prevalence of each gene in all samples
+global_conserved_genes_prevalence_by_gene = global_conserved_genes[,.(prev=length(unique(sample))),by = .(V1)]
+# write tables
+write.table(global_conserved_genes_prevalence_by_ecosystem,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_prevalences/global_conserved_genes_prevalence_by_ecosystem.txt",sep="\t",col.names=T,row.names=F,quote=F)
+write.table(global_conserved_genes_prevalence_by_gene,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_prevalences/global_conserved_genes_prevalence_by_gene.txt",sep="\t",col.names=T,row.names=F,quote=F)
+```
+

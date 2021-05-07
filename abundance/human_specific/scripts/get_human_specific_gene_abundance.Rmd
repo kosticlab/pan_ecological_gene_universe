@@ -1,0 +1,171 @@
+---
+title: "get_human_specific_gene_abundance"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First make diamond databases
+
+```{bash}
+sbatch -t 0-11:59 -p short -c 1 --mem=10G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/make_diamond_dbs.bash /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-AIRWAYS-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-NASAL-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-ORAL-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-SKIN-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-VAGINAL-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-SPECIFIC_CONGENES_SEQS
+
+## now run alignments
+
+sbatch -c 4 -p short --mem=30G -t 0-06:00 --array=1-422%50 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/align_OV2_intersections_batch.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/fig3_4_input_all_IDs.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/gene_abundance_output /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/tmp 4 /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-AIRWAYS-SPECIFIC_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT-SPECIFIC_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-NASAL-SPECIFIC_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-ORAL-SPECIFIC_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-SKIN-SPECIFIC_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-VAGINAL-SPECIFIC_CONGENES_SEQS_db.dmnd,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-SPECIFIC_CONGENES_SEQS_db.dmnd /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-AIRWAYS-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-GUT-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-NASAL-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-ORAL-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-SKIN-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-VAGINAL-SPECIFIC_CONGENES_SEQS,/n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/all_seqs_rep_30_collapsed_cluster.fasta_HUMAN-SPECIFIC_CONGENES_SEQS # 29391068
+
+```
+
+Next we check whether human specific genes (genes prevalent in at least one human sample but no other type of sample) have greater abundance in each body site than all  non-gut ecologies
+
+```{bash}
+/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/code_to_do_human_vs_all/get_pval_in_chunks_human_vs_all_batch.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/gene_abundance_output HUMAN-SPECIFIC_CONGENES_SEQS airways,human_gut,nasal,human_oral,skin,vaginal /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/HUMAN-SPECIFIC_CONGENES /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/pval_tables/human_vs_all_else 1000000
+
+```
+
+Now correct p-values to fdr and find genes that are significantly more abundant in at least one human host microbiome than non-gut microbiomes. End result of this is a binary matrix with rows as genes and columns as host microbiome types. 1 means that the gene is more abundant in samples from the specified host microbiome than in non-gut microbiomes
+
+```{r}
+library(data.table)
+input_path = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/pval_tables/human_vs_all_else"
+database = "HUMAN-SPECIFIC_CONGENES_SEQS"
+target_ecologies = "airways,human_gut,nasal,human_oral,skin,vaginal"
+target_ecologies = strsplit(target_ecologies,split=",")[[1]]
+# compare ecologies
+compare_ecologies = "aquatic,aquatic_sediment,coral,glacier_permafrost,phyllosphere,soil"
+compare_ecologies = strsplit(compare_ecologies,split=",")[[1]]
+
+target_vs_compare = expand.grid(target_ecologies,compare_ecologies)
+
+myfiles = list.files(input_path,pattern=database,full.names = T)
+
+all_genes_list = lapply(myfiles, function(x) {
+  file_temp = fread(x,header=T,sep="\t")
+  return(file_temp)
+})
+all_genes_DF = do.call("rbind",all_genes_list)
+# get pval columns
+target_vs_compare_str = paste(target_vs_compare[,1],target_vs_compare[,2],sep="_vs_")
+pval_cols_names = paste("pval_",target_vs_compare_str,sep="")
+pval_cols = all_genes_DF[,..pval_cols_names]
+
+fdr_columns = pval_cols[, lapply(.SD, function(x) p.adjust(x,method="BY"))]
+colnames(fdr_columns) = gsub("pval_","fdr_",colnames(fdr_columns))
+
+sig_genes_each_ecology=lapply(target_ecologies, function(myecology) {
+  # first get all pvalue columns
+  cols_prefix_to_search  = paste("fdr_",myecology,"_vs_",sep="")
+  # get fdr columns
+  fdr_cols_temp = fdr_columns[,grep(cols_prefix_to_search,colnames(fdr_columns)),with=FALSE]
+  # # get the sig genes
+  sig_indexes = which(rowSums(fdr_cols_temp<0.05)==ncol(fdr_cols_temp))
+  # the gene names are stored in all_genes_DF. should still be in same order as fdr_columns
+  sig_genes = all_genes_DF[sig_indexes,]
+  sig_gene_names = sig_genes$geneName
+  return(sig_gene_names)
+})
+names(sig_genes_each_ecology) = target_ecologies
+all_sig_gene_names = unique(unlist(sig_genes_each_ecology))
+binary_mat = sapply(sig_genes_each_ecology,function(x) as.numeric(all_sig_gene_names%in%x))
+colnames(binary_mat) = names(sig_genes_each_ecology)
+rownames(binary_mat) = all_sig_gene_names
+binary_mat = as.data.frame(binary_mat)
+binary_mat = cbind(geneName=rownames(binary_mat),binary_mat)
+write.table(binary_mat,"/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/pval_tables/sig_genes_binary_mat_human_vs_non_gut.txt",col.names=T,row.names=F,sep="\t",quote=F)
+```
+
+Annotate significant genes with gene and taxa info.
+
+```{r}
+# use 100GB on cluster
+library(data.table)
+binary_mat = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/pval_tables/sig_genes_binary_mat_human_vs_non_gut.txt",sep="\t",header=T,row.names=1)
+binary_mat_cols = colnames(binary_mat)
+
+pres_ecologies_sig_genes = apply(binary_mat, 1,function(x) {
+  egologies = binary_mat_cols[which(x==1)]
+  egologies = paste(egologies,collapse="__")
+  return(egologies)
+})
+pres_ecologies_sig_genes_DF = data.frame(geneName=names(pres_ecologies_sig_genes),category=pres_ecologies_sig_genes)
+pres_ecologies_sig_genes_DF_split = split(pres_ecologies_sig_genes_DF,pres_ecologies_sig_genes_DF$category)
+## now annotate the genes with gene and taxonomy annotations
+consensus_seq_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt | grep -v 'ftype'"),header=F)
+cog_funcs = fread("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/cog-20.def.tab",header=FALSE,data.table = F)
+cog_category = read.table("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/fun-20.tab",header=F,sep="\t")
+EC_desc = read.table("/n/data1/joslin/icrb/kostic/szimmerman/all_EC_to_desc.txt",sep="\t",quote="")
+# load in taxonomy annotations 
+taxa_data = fread("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",sep="\t",header=T)
+consensus_taxa_ID = fread("/n/scratch3/users/a/adk9/orfleton/ov2_gene_taxa_annotation",sep="\t",header=F)
+
+human_specific_intersection_annotations = lapply(pres_ecologies_sig_genes_DF_split, function(myDF) {
+  cat_temp = unique(myDF$category)
+  print(cat_temp)
+  sig_gene_names_split = tstrsplit(myDF$geneName,split="_",keep=c(2,3))
+  sig_gene_names_no_eco = paste(sig_gene_names_split[[1]],sig_gene_names_split[[2]],sep="_")
+  myDF = cbind(geneName_no_eco=sig_gene_names_no_eco,myDF)
+  consensus_seq_annotations_ordered = consensus_seq_annotations[match(myDF$geneName_no_eco,consensus_seq_annotations$V1)]
+  sig_COGs = consensus_seq_annotations_ordered$V6
+  sig_geneID=consensus_seq_annotations_ordered$V4
+  sig_ECid=consensus_seq_annotations_ordered$V5
+  sig_protein=consensus_seq_annotations_ordered$V7
+  ## get descriptions for the COG
+  cog_funcs_sorted = cog_funcs[match(sig_COGs,cog_funcs$V1),]
+  COG_name = cog_funcs_sorted$V3
+  COG_gene_name = cog_funcs_sorted$V4
+  COG_functional_pathway = cog_funcs_sorted$V5
+  COG_functional_category = cog_funcs_sorted$V2
+  cog_cat_description_vec = sapply(strsplit(COG_functional_category,split=""),function(x) paste(cog_category[match(x,cog_category[,1]),3],collapse="/"))
+  ### NOW GET EC NUMBER ANNOTATIONS
+  EC_split_temp = strsplit(sig_ECid,split="[.]")
+  EC_description = sapply(EC_split_temp, function(x) {
+    original_EC = paste(x,collapse=".")
+    specific_desc = EC_desc[match(original_EC,EC_desc$V1),2]
+    number_dashes_temp = sum(x=="-")
+    if(number_dashes_temp == 0 & !is.na(specific_desc)) {
+      x[4] = "-"
+      x_adjusted = paste(x,collapse=".")
+      general_EC = EC_desc[match(x_adjusted,EC_desc$V1),2]
+      specific_desc = paste(general_EC,specific_desc)
+    }
+    return(specific_desc)
+  })
+  taxa_data_ordered = taxa_data[match(myDF$geneName_no_eco,taxa_data$geneName)]
+  consensus_taxa_ID_ordered = consensus_taxa_ID[match(myDF$geneName,consensus_taxa_ID$V1)]
+  #### OK I think I have all the metadata I want. Now time to put together
+  myDF$geneID=sig_geneID
+  myDF$protein=sig_protein
+  myDF$COG=sig_COGs
+  myDF$COG_name = COG_name
+  myDF$COG_gene_name = COG_gene_name
+  myDF$COG_functional_pathway = COG_functional_pathway
+  myDF$COG_functional_category = COG_functional_category
+  myDF$cog_cat_description = cog_cat_description_vec
+  myDF$ECid = sig_ECid
+  myDF$EC_description = EC_description
+  myDF = cbind(myDF,taxa_data_ordered[,-c(1,9)])
+  myDF$taxa_ID = consensus_taxa_ID_ordered$V2
+  write.table(myDF,file=paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/human_specific_intersections_vs_non_gut/",cat_temp,"_annotations.txt",sep=""),sep="\t",quote=F,col.names=T,row.names=F)
+  return(myDF)
+})
+```
+
+Now lets take the files made above and put them into a single file with gene, taxa ID, and the ecologies its abundant in. This will be used for making taxonomic architecture plots
+
+```{r}
+library(data.table)
+annotation_files = list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/human_specific_intersections_vs_non_gut",pattern  ="_annotations.txt",full.names = T)
+myDFs = lapply(annotation_files, function(myfile) {
+  myDT = fread(myfile)
+  myDT_col_select = myDT[,.(geneName,taxa_ID,category)]
+  ecologies = strsplit(myDT_col_select$category,split="__",fixed=T)
+  long_df = data.frame( gene=rep(myDT_col_select$geneName, lengths(ecologies)), taxaID=rep(myDT_col_select$taxa_ID, lengths(ecologies)),ecology=unlist(ecologies))
+  return(long_df)
+})
+all_genes = do.call("rbind",myDFs)
+write.table(all_genes,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/figure5_human_specific_universal_genes/human_specific_intersections_vs_non_gut/gene_taxID_ecology_human_vs_non_gut.txt",sep="\t",quote=F,col.names=T,row.names=F)
+```

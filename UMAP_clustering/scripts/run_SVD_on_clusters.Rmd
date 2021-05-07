@@ -1,0 +1,63 @@
+---
+title: "run_SVD_on_clusters"
+author: "Sam Zimmerman"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#First run SVD on all samples
+
+```{bash}
+#sbatch -p highmem -c 1 -t 0-11:59 --mem=200G calc_svd.bash /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/multi_map_30_collapsed_processed.csv 0
+
+sbatch -p highmem -c 1 -t 0-11:59 --mem=400G calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv 0
+```
+
+
+##Human clusters are cluster 7, 2 (gut clusters) 3 and 4 are oral+. Lets make subclusters of these guys
+
+```{r}
+cluster_membership = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_cluster_mem.txt",sep="\t",header=T)
+cluster7_samples = cluster_membership[cluster_membership$cluster==7,1]
+cluster3_samples = cluster_membership[cluster_membership$cluster==3,1]
+cluster2_samples = cluster_membership[cluster_membership$cluster==2,1]
+cluster4_samples = cluster_membership[cluster_membership$cluster==4,1]
+
+cluster7_samples = paste(cluster7_samples,",",sep="")
+cluster3_samples = paste(cluster3_samples,",",sep="")
+cluster2_samples = paste(cluster2_samples,",",sep="")
+cluster4_samples = paste(cluster4_samples,",",sep="")
+
+write.table(cluster7_samples,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_7/cluster7samples.txt",col.names = F,row.names = F,quote=F)
+write.table(cluster3_samples,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_3/cluster3samples.txt",col.names = F,row.names = F,quote=F)
+write.table(cluster2_samples,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_2/cluster2samples.txt",col.names = F,row.names = F,quote=F)
+write.table(cluster4_samples,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_4/cluster4samples.txt",col.names = F,row.names = F,quote=F)
+```
+
+
+#Next run SVD on subcluster 7, 3, 2, and 4
+
+```{bash}
+grep -f /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_7/cluster7samples.txt -F /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_7/multi_map_30_collapsed_processed_cluster7samples.csv
+
+grep -f /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_3/cluster3samples.txt -F /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_3/multi_map_30_collapsed_processed_cluster3samples.csv
+
+grep -f /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_2/cluster2samples.txt -F /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_2/multi_map_30_collapsed_processed_cluster2samples.csv
+
+grep -f /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_4/cluster4samples.txt -F /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_4/multi_map_30_collapsed_processed_cluster4samples.csv
+
+
+## now its time to make SVD plots
+sbatch -p highmem -c 1 -t 0-11:59 --mem=400G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_7/multi_map_30_collapsed_processed_cluster7samples.csv 0
+
+sbatch -p highmem -c 1 -t 0-11:59 --mem=400G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_3/multi_map_30_collapsed_processed_cluster3samples.csv 0
+
+sbatch -p highmem -c 1 -t 0-11:59 --mem=400G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_2/multi_map_30_collapsed_processed_cluster2samples.csv 0
+
+sbatch -p highmem -c 1 -t 0-11:59 --mem=400G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/recluster_cluster_4/multi_map_30_collapsed_processed_cluster4samples.csv 0
+
+```

@@ -1,0 +1,87 @@
+---
+title: "create_intersection_abundance_boxplots"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/")
+```
+
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(cowplot)
+library(data.table)
+library(ggpubr)
+library(rstatix)
+library(ggtext)
+library(scales)
+
+visualize_diff_abundant_genes = function(input_file,database,sig_genes_file) {
+
+# load in category info and sig genes
+sample_categories = read.table("sample_to_categories.txt",sep="\t",header=T)
+congenes_raw_mat = fread(input_file,sep="\t",header=T,data.table=F)
+rownames(congenes_raw_mat) = congenes_raw_mat$geneName
+congenes_raw_mat = congenes_raw_mat[,-1]
+# remove weird decimal places on column names
+colnames(congenes_raw_mat) = sapply(strsplit(colnames(congenes_raw_mat),split="[.]"), function(x) x[1])
+congenes_raw_mat = as.matrix(congenes_raw_mat)
+
+sig_gene_df = fread(sig_genes_file)
+congenes_raw_mat_sig = congenes_raw_mat[sig_gene_df$geneName_no_eco,]
+congenes_raw_mat_melt_sig_genes = reshape2::melt(congenes_raw_mat_sig)
+congenes_raw_mat_melt_sig_genes$category = sample_categories[match(congenes_raw_mat_melt_sig_genes$Var2,sample_categories$sample_type),"category"]
+### now normalize values by read length
+congenes_raw_mat_melt_sig_genes$value_norm_pseudo = congenes_raw_mat_melt_sig_genes$value+1
+congenes_raw_mat_melt_sig_genes$value_norm_log = log10(congenes_raw_mat_melt_sig_genes$value_norm_pseudo)
+
+# order by category
+boxplot_stats = congenes_raw_mat_melt_sig_genes %>% group_by(Var2) %>%  summarise(boxplot= list( setNames(boxplot.stats(value_norm_pseudo)$stats,c('lower_whisker','lower_hinge','median','upper_hinge','upper_whisker') ) ) ) %>% unnest_wider(boxplot)
+boxplot_stats$category = sample_categories[match(boxplot_stats$Var2,sample_categories[,1]),2]
+sample_order =  boxplot_stats$Var2[order(boxplot_stats$category)]
+sample_order = as.character(sample_order)
+congenes_raw_mat_melt_sig_genes$Var2 = factor(congenes_raw_mat_melt_sig_genes$Var2,levels = sample_order)
+
+## now put in colors
+library(RColorBrewer)
+#myCols = viridis(n=length(unique(sample_categories$category)))
+myCols = brewer.pal(n=length(unique(sample_categories$category)), name="Dark2")
+names(myCols) = unique(sample_categories$category)
+cat_order = sample_categories[match(sample_order,sample_categories$sample_type),"category"]
+myCols_ordered = myCols[match(cat_order,names(myCols))]
+
+
+# plot
+scaleFUN <- function(x) sprintf("%.2f", x)
+myplot2 = ggplot(congenes_raw_mat_melt_sig_genes, aes(x=Var2,y=value_norm_pseudo)) + geom_boxplot(aes(fill=category)) +  theme(axis.text.x = element_text(angle = 75,vjust=0.5,size = 15),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecology",y="Relative abundance") + geom_jitter(shape=16, position=position_jitter(0.2),size=0.2,alpha=0.5) + scale_y_continuous(trans=log10_trans(),breaks=trans_breaks("log10",function(x) 10^x),labels=scaleFUN) + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+png(paste(database,"_category_ordered_with_outliers_pairwise_difexp_filter_without_rizo2.png",sep=""),width=1000)
+print(myplot2)
+dev.off()
+
+# also create plot with outliers removed for easier visualization
+boxplot_stats$Var2 <- factor(boxplot_stats$Var2, levels = boxplot_stats$Var2[order(boxplot_stats$category)])
+
+boxplot_no_outliers <- ggplot(boxplot_stats, aes(x=Var2, lower=lower_hinge, upper=upper_hinge, middle=median, ymin=lower_whisker, ymax=upper_whisker,fill=category)) + geom_boxplot(stat="identity") +  theme(axis.text.x = element_text(angle = 75,vjust=0.5,size = 15),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "ecology",y="Relative abundance") + scale_y_continuous(trans=log10_trans(),breaks=trans_breaks("log10",function(x) 10^x),labels=scaleFUN) + theme(axis.text.x = element_markdown(colour =myCols_ordered)) + scale_fill_manual(name="Category",values = myCols_ordered)
+pdf(paste(database,"_category_ordered_NO_outliers_pairwise_difexp_filter_without_rizo.pdf",sep=""))
+print(boxplot_no_outliers)
+dev.off()
+}
+
+visualize_diff_abundant_genes(input_file="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_abundance_mat_normalized.txt",database="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2",sig_genes_file="HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_all_annotations.txt")
+
+visualize_diff_abundant_genes(input_file="GUT_ENV_CONGENES_SEQS_abundance_mat_normalized.txt",database="GUT_ENV_CONGENES_SEQS",sig_genes_file="GUT_ENV_CONGENES_SEQS_all_annotations.txt")
+
+visualize_diff_abundant_genes(input_file="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_abundance_mat_normalized.txt",database="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS",sig_genes_file="AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_all_annotations.txt")
+```
+

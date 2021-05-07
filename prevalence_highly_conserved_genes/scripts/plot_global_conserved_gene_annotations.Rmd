@@ -1,0 +1,92 @@
+---
+title: "plot_global_conserved_gene_annotations"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figure4_highly_conserved_genes/")
+```
+
+##Make more enrichment plots now that we created global_conserved_genes_prevalence_annotated.txt
+
+```{r}
+library(data.table)
+global_conserved_genes_prevalence_ordered = fread("global_conserved_genes_prevalence_annotated.txt")
+
+## get number of genes prevalent in greater than 90% of samples
+sum(global_conserved_genes_prevalence_ordered$proportion_of_total_samples >= 0.90) # 610
+sum(global_conserved_genes_prevalence_ordered$proportion_of_total_samples >= 0.95) # 138
+
+global_conserved_genes_prevalence_ordered = as.data.frame(global_conserved_genes_prevalence_ordered)
+
+global_conserved_genes_prevalence_ordered$EC_desc_unique = make.unique(global_conserved_genes_prevalence_ordered$EC_desc)
+global_conserved_genes_prevalence_ordered$EC_desc_unique[which(is.na(global_conserved_genes_prevalence_ordered$EC_desc_unique))] = "NA"
+
+
+EC_plot_top_prev <-ggplot(data=global_conserved_genes_prevalence_ordered[1:25,], aes(x=reorder(EC_desc_unique,proportion_of_total_samples), y=proportion_of_total_samples)) + geom_bar(stat="identity") + coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + ylab("proportion") + xlab("EC number description")
+
+pdf("figures/EC_desc_proportions_top25_prevalent_genes.pdf",width=18)
+print(EC_plot_top_prev)
+dev.off()
+
+### now do the same thing for COG name
+global_conserved_genes_prevalence_ordered$COG_desc_unique = make.unique(global_conserved_genes_prevalence_ordered$COG_desc)
+global_conserved_genes_prevalence_ordered$COG_desc_unique[which(is.na(global_conserved_genes_prevalence_ordered$COG_desc_unique))] = "NA"
+
+COG_plot_top_prev <-ggplot(data=global_conserved_genes_prevalence_ordered[1:25,], aes(x=reorder(COG_desc_unique,proportion_of_total_samples), y=proportion_of_total_samples)) + geom_bar(stat="identity") + coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + ylab("proportion") + xlab("COG description")
+pdf("figures/COG_desc_proportions_top25_prevalent_genes.pdf",width=18)
+print(COG_plot_top_prev)
+dev.off()
+
+### do the same thing for protein description
+global_conserved_genes_prevalence_ordered$protein_names_unique = make.unique(global_conserved_genes_prevalence_ordered$V5)
+global_conserved_genes_prevalence_ordered$protein_names_unique[which(is.na(global_conserved_genes_prevalence_ordered$protein_names_unique))] = "NA"
+protein_plot_top_prev <-ggplot(data=global_conserved_genes_prevalence_ordered[1:25,], aes(x=reorder(protein_names_unique,proportion_of_total_samples), y=proportion_of_total_samples)) + geom_bar(stat="identity") + coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + ylab("proportion") + xlab("protein name")
+pdf("figures/protein_desc_proportions_top25_prevalent_genes.pdf",width=18)
+print(protein_plot_top_prev)
+dev.off()
+
+### GET COG Categories
+#COG_cat_proportions = sort(table(unlist(strsplit(cog_cat_description_vec,split="-"))) / nrow(consensus_seq_annotations_global_conserved),decreasing=T)
+
+COG_cat_proportions = sort(table(unlist(strsplit(global_conserved_genes_prevalence_ordered$COG_cat,split="-"))) / nrow(global_conserved_genes_prevalence_ordered),decreasing=T)
+
+COG_cat_proportions_DF= data.frame(COG=names(COG_cat_proportions),proportion=as.numeric(COG_cat_proportions))
+COG_cat_proportions_DF = COG_cat_proportions_DF[order(COG_cat_proportions_DF$proportion,decreasing=T),]
+
+
+COG_cat_plot <-ggplot(data=COG_cat_proportions_DF, aes(x=reorder(COG, proportion), y=proportion)) + geom_bar(stat="identity") + coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + ylab("proportion") + xlab("COG category")
+pdf("figures/COG_category_proportions.pdf")
+print(COG_cat_plot)
+dev.off()
+
+
+### now get the taxonomy of top 25
+for(x in c("phylum","class","order","family","genus","species")) {
+  global_conserved_genes_prevalence_ordered$taxa_name_unique = make.unique(global_conserved_genes_prevalence_ordered[,x])
+  global_conserved_genes_prevalence_ordered$taxa_name_unique[which(is.na(global_conserved_genes_prevalence_ordered$taxa_name_unique))] = "NA"
+  taxa_plot_top_prev <-ggplot(data=global_conserved_genes_prevalence_ordered[1:25,], aes(x=reorder(taxa_name_unique,proportion_of_total_samples), y=proportion_of_total_samples)) + geom_bar(stat="identity") + coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + ylab("proportion") + xlab("protein name")
+pdf(paste("figures/",x,"_desc_proportions_top25_prevalent_genes.pdf",sep=""),width=18)
+print(taxa_plot_top_prev)
+dev.off()
+}
+
+as.factor(sample_categories[order(sample_categories$sample_type),"category"])
+
+for(x in c("phylum","class","order","family","genus","species")) {
+  taxa_counts_temp = table(global_conserved_genes_prevalence_ordered[,x])
+  taxa_prop_temp = taxa_counts_temp/nrow(global_conserved_genes_prevalence_ordered)
+  taxa_prop_temp_DF = data.frame(taxa=names(taxa_prop_temp),proportion_of_samples=as.numeric(taxa_prop_temp))
+  taxa_prop_temp_DF_ordered = taxa_prop_temp_DF[order(taxa_prop_temp_DF$proportion_of_samples,decreasing=T),]
+  taxa_prop_plot <-ggplot(data=taxa_prop_temp_DF_ordered[1:25,], aes(x=reorder(taxa, proportion_of_samples), y=proportion_of_samples)) + geom_bar(stat="identity") + coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + ylab("proportion of samples") + xlab("taxa")
+pdf(paste("figures/",x,"_proportions.pdf",sep=""),width=18)
+print(taxa_prop_plot)
+dev.off()
+}
+```

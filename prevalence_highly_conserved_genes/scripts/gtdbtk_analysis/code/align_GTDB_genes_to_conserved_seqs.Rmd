@@ -1,0 +1,110 @@
+---
+title: "align_GTDB_genes_to_conserved_seqs"
+author: "Sam Zimmerman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## We want to see if GTDBTK 120 bacteria genes are in our gene list
+
+First I need to get the HMMs of each of the GTDBTK bac 120 genes. The first thing I did was get the list of 120 conserved bacterial genes from supplementary table 6 of Parks 2017. This is bac120.csv
+
+Parks, Donovan H., Christian Rinke, Maria Chuvochina, Pierre-Alain Chaumeil, Ben J. Woodcroft, Paul N. Evans, Philip Hugenholtz, and Gene W. Tyson. 2017. “Recovery of Nearly 8,000 Metagenome-Assembled Genomes Substantially Expands the Tree of Life.” Nature Microbiology 2 (11): 1533–42.
+
+Next I downloaded all the TIGRFAM and PFAM HMMs and get HMMs for each of the bac120.
+
+```{bash}
+# current release is Pfam 33.1. Downloaded on March 6, 2021
+wget http://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz
+gunzip Pfam-A.hmm.gz
+conda activate /home/sez10/miniconda3_2/envs/interproscan
+hmmfetch --index Pfam-A.hmm
+conda deactivate
+
+# current release of TIGRFAM is 15.0. Downloaded on March 6, 2021
+wget ftp://ftp.jcvi.org/pub/data/TIGRFAMs/TIGRFAMs_15.0_HMM.tar.gz
+
+# Next get the names of the HMMs from bac 120
+cat /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4/gtdbtk_analysis/bac120.csv | awk -F',' '{print $1}' | grep -v "Marker" | awk -F'.' '{print $1}' > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_names.txt
+### put the TIGR HMM in a separate file
+grep "TIGR" /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_names.txt  > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_TIGRFAM_names.txt
+awk '{print $0".HMM"}' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_TIGRFAM_names.txt > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_TIGRFAM_names_v2.txt
+
+
+### put PFAM HMM names in a separate file
+grep "PF" /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_names.txt  > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_PFAM_names.txt
+### now get the actuall HMMs from PFAM
+
+while read line; do /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/fetch_HMMs.bash $line Pfam-A.hmm; done < /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_PFAM_names.txt
+### now get HMMs from TIGRFAM. run from inside folder HMM_profiles
+tar -zxvf /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/TIGRFAMs_15.0_HMM.tar.gz -T /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_TIGRFAM_names_v2.txt
+### now make input file where each line is the file with the HMM. total 120 lines
+ls /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/HMM_profiles/* > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_file_locations.txt
+```
+
+Use HMMER search to see if any of the 120 GTDB bac120 genes are in raw genes
+
+```{bash}
+
+# first we are extracting the names of all the raw genes that make up the consensus genes
+awk '{print $1'} /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES_MAPPING > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/raw_global_conservative_genes.txt
+# next extract the sequences from the pan genome file
+sbatch -p priority -c 1 -n 1 --mem=100G -t 0-11:59 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/subseq_highly_conserved_raw_genes.bash
+
+### now run hmmsearch where query is each of the bac 120 HMMs and database is my raw genes
+while read line
+do
+  sbatch -c 5 -p short --mem=30G -t 0-11:59 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/get_bac120_in_conserved_raw_genes.bash ${line} /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_raw_genes
+done < /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_file_locations.txt
+
+```
+
+Use HMMER search to see if any of the 120 GTDB bac120 genes are in consensus genes
+
+```{bash}
+### first extract the names of all the consenus genes
+awk '{print $1'} /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/overlap_analysis/GLOBAL-CONSERVATIVE_CONGENES > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/consensus_global_conservative_genes.txt
+# next extract the sequences from the pan genome file
+sbatch -p priority -c 1 -n 1 --mem=100G -t 0-11:59 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/subseq_highly_conserved_consensus_genes.bash
+
+
+
+sbatch -c 5 -p short --mem=30G -t 0-11:59 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/get_bac120_in_conserved_consensus_genes.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_HMM_file_locations.txt /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes
+
+```
+
+Now combine output of alignments into a single table for consensus sequences
+
+```{r}
+library(data.table)
+library(ggplot2)
+aligned_bac120_files= list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes",full.names = T,pattern = "_prev.txt")
+
+aligned_bac120 = lapply(aligned_bac120_files, function(x) {
+  mycmd = paste("grep -v '#'",x,"| awk -F ' ' '{print $1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10}'")
+  myTab = fread(cmd=mycmd,header=F,sep=" ")
+  return(myTab)
+})
+
+aligned_bac120_df = do.call("rbind",aligned_bac120)
+write.table(aligned_bac120_df,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_consensus_genes/gtdb_aligned_to_conserved_consensus_genes.txt",sep="\t",col.names=F,row.names=F,quote=F)
+```
+
+Do the same thing for raw genes
+
+```{r}
+library(data.table)
+library(ggplot2)
+aligned_bac120_files_raw= list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_raw_genes",full.names = T,pattern = "_prev.txt")
+aligned_bac120 = lapply(aligned_bac120_files_raw, function(x) {
+  mycmd = paste("grep -v '#'",x,"| awk -F ' ' '{print $1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10}'")
+  myTab = fread(cmd=mycmd,header=F,sep=" ")
+  return(myTab)
+})
+aligned_bac120_df = do.call("rbind",aligned_bac120)
+fwrite(aligned_bac120_df,file="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/presence_in_consensus_genes/bac120_in_conserved_raw_genes/gtdb_aligned_to_raw_conserved_raw_genes.txt",col.names=F,row.names=F,sep="\t",quote=F)
+```

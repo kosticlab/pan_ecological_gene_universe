@@ -1,0 +1,68 @@
+---
+title: "gtdbtk_prevalnece"
+author: "Sam Zimmerman"
+date: "4/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Align each HMM to our set of pan genes
+
+```{bash}
+for x in /n/scratch3/users/v/vnl3/orfleton_v2_analysis/gtdbtk_anlysis/HMM_profiles/*
+do
+  sbatch -c 5 -p short --mem=30G -t 0-05:00 get_pan_gene_prev.bash ${x} /n/scratch3/users/v/vnl3/orfleton_v2_analysis/gtdbtk_anlysis/gtdbtk_prevalence_all_genes
+done
+### do TIGR00630 again. ran out of memory
+sbatch -c 5 -p priority --mem=50G -t 0-11:00 get_pan_gene_prev.bash /n/scratch3/users/v/vnl3/orfleton_v2_analysis/gtdbtk_anlysis/HMM_profiles/TIGR00630.HMM /n/scratch3/users/v/vnl3/orfleton_v2_analysis/gtdbtk_anlysis/gtdbtk_prevalence_all_genes
+```
+
+concatentate output below 
+
+```{r}
+library(data.table)
+prevalence_files = list.files("/n/scratch3/users/v/vnl3/orfleton_v2_analysis/gtdbtk_anlysis/gtdbtk_prevalence_all_genes",pattern = "_prev.txt",full.names = T)
+# load in bac120 data
+bac120=fread("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4/gtdbtk_analysis/bac120.csv",sep=",")
+colnames(bac120)[1] = "Marker_ID"
+bac120$Marker = sapply(strsplit(bac120$Marker_ID,split="[.]"), function(x) x[1])
+prevalence_files_bac120 = prevalence_files[gsub("_prev.txt","",basename(prevalence_files))%in%bac120$Marker]
+# load in annotations
+sample_annotations = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_march_22_2021.csv")
+sample_ecology = sample_annotations$ecology
+sample_ecology_nums = table(sample_ecology)
+names(sample_ecology_nums) = toupper(names(sample_ecology_nums))
+
+
+prevalence_per_gtdbtk_gene = lapply(prevalence_files_bac120, function(x) {
+  geneName = gsub("_prev.txt","",basename(x))
+  print(geneName)
+  mycmd = paste("grep -v '#'",x,"| awk -F ' ' '{print $1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10}'")
+  myTab = fread(cmd=mycmd,header=F,sep=" ")
+  myTab[, c("ecosystem", "sample") := tstrsplit(myTab$V1, split="_", fixed=TRUE,keep=c(1,2))]
+  prevalence = length(unique(myTab$sample))
+  fraction_samples= prevalence/nrow(sample_annotations)
+  prev_all_samples = c(prevalence,fraction_samples,geneName)
+  ### now get the ecosystem fractions
+  prevalence_by_ecosystem = myTab[,.(prev=length(unique(sample))),by = .(ecosystem)]
+  sample_ecology_nums_matched = sample_ecology_nums[match(prevalence_by_ecosystem$ecosystem,names(sample_ecology_nums))]
+  prevalence_by_ecosystem[, frac := prevalence_by_ecosystem$prev/sample_ecology_nums_matched]
+  prevalence_by_ecosystem[, gene := rep(geneName,nrow(prevalence_by_ecosystem))]
+  return(list(prev_all_samples,prevalence_by_ecosystem))
+})
+
+prevalence_all_ecosystems = lapply(prevalence_per_gtdbtk_gene, function(x) x[[1]])
+prevalence_all_ecosystems_df = do.call("rbind",prevalence_all_ecosystems)
+colnames(prevalence_all_ecosystems_df) = c("prevalence","fraction","gene")
+
+prevalence_each_ecosystem = lapply(prevalence_per_gtdbtk_gene, function(x) x[[2]])
+prevalence_each_ecosystem_DT = do.call("rbind",prevalence_each_ecosystem)
+
+write.table(prevalence_all_ecosystems_df,"/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/prevalence_all_bac120_full_gene_catalogue/prevalence_all_samples.txt",sep="\t",quote=F,col.names=T,row.names=F)
+
+write.table(prevalence_each_ecosystem_DT,"/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/GTDB_analysis/prevalence_all_bac120_full_gene_catalogue/prevalence_all_samples_per_ecology.txt",sep="\t",quote=F,col.names=T,row.names=F)
+
+```

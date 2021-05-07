@@ -1,0 +1,669 @@
+---
+title: "enrichment_dependencies"
+author: "Sam Zimmerman"
+date: "1/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+##Get enrichment for UMAP/HDBSCAN clusters
+```{r}
+get_prokka_protein_enrichments = function(not_group_interest_dt,group_interest_dt) {
+  setkey(group_interest_dt,V7)
+  unique_product_names = unique(group_interest_dt$V7)
+  #unique_product_names = unique_product_names[unique_product_names!= "hypothetical protein"]
+  setkey(not_group_interest_dt,V7)
+  ## do enrichment
+  prokka_protein_enrichments = sapply(unique_product_names, function(protein_product) {
+    #present_group_interest = nrow(group_interest_dt[V7==protein_product])
+    present_group_interest = nrow(group_interest_dt[protein_product])
+    absent_group_interest = nrow(group_interest_dt) - present_group_interest
+    #present_not_group_interest = nrow(not_group_interest_dt[V7==protein_product])
+    present_not_group_interest = nrow(not_group_interest_dt[protein_product])
+    abscent_not_group_interest= nrow(not_group_interest_dt)-present_not_group_interest
+    ## add 1 to all groups so I don't get any INF values
+    present_group_interest = present_group_interest +1
+    absent_group_interest = absent_group_interest + 1
+    present_not_group_interest = present_not_group_interest + 1
+    abscent_not_group_interest = abscent_not_group_interest + 1
+    conting_tble = data.frame(group=c(present_group_interest,absent_group_interest),not_group=c(present_not_group_interest,abscent_not_group_interest))
+    rownames(conting_tble) = c("present","absent")
+    test= ""
+    pval = 1
+    if(sum(conting_tble>5) == 4) {
+      pval = chisq.test(conting_tble)$p.value
+      test = "chis_squared"
+    } else {
+      pval = fisher.test(conting_tble)$p.value
+      test = "fisher_exact"
+    }
+    odds_group = present_group_interest/absent_group_interest
+    odds_not_group = present_not_group_interest/abscent_not_group_interest
+    odds_ratio = odds_group/odds_not_group
+    CI = 1.96 * (sqrt(((1/present_group_interest)+(1/absent_group_interest)+(1/present_not_group_interest)+(1/abscent_not_group_interest))))
+    upper95_CI = exp((log(odds_ratio) + CI))
+    lower95_CI = exp((log(odds_ratio) - CI))
+    proportion_of_gene_in_cluster = present_group_interest/(present_group_interest+absent_group_interest)
+    proportion_of_genes_out_of_cluster = present_not_group_interest/(present_not_group_interest+abscent_not_group_interest)
+    output = c(pvalue=pval,odds_ratio=odds_ratio,upper95_CI=upper95_CI,lower95_CI=lower95_CI,percent_genes_annotated_to_protein_in_cluster=proportion_of_gene_in_cluster*100,percent_genes_annotated_to_protein_out_of_cluster=proportion_of_genes_out_of_cluster*100,present_group_interest_counts=present_group_interest,present_not_group_interest_counts=present_not_group_interest,test=test)
+    return(output)
+  })
+  prokka_protein_enrichments = t(prokka_protein_enrichments)
+  prokka_protein_enrichments = as.data.frame(prokka_protein_enrichments)
+  prokka_protein_enrichments$pvalue = as.numeric(prokka_protein_enrichments$pvalue)
+  prokka_protein_enrichments$odds_ratio = as.numeric(prokka_protein_enrichments$odds_ratio)
+  prokka_protein_enrichments$upper95_CI = as.numeric(prokka_protein_enrichments$upper95_CI)
+  prokka_protein_enrichments$lower95_CI = as.numeric(prokka_protein_enrichments$lower95_CI)
+  prokka_protein_enrichments$percent_genes_annotated_to_protein_in_cluster = as.numeric(prokka_protein_enrichments$percent_genes_annotated_to_protein_in_cluster)
+  prokka_protein_enrichments$percent_genes_annotated_to_protein_out_of_cluster = as.numeric(prokka_protein_enrichments$percent_genes_annotated_to_protein_out_of_cluster)
+    prokka_protein_enrichments$present_group_interest_counts = as.numeric(prokka_protein_enrichments$present_group_interest_counts)
+    prokka_protein_enrichments$present_not_group_interest_counts = as.numeric(prokka_protein_enrichments$present_not_group_interest_counts)
+  prokka_protein_enrichments$fdr = p.adjust(prokka_protein_enrichments$pvalue,method="BY")
+  prokka_protein_enrichments = cbind(protein=rownames(prokka_protein_enrichments),prokka_protein_enrichments)
+  prokka_protein_enrichments = prokka_protein_enrichments[order(prokka_protein_enrichments$pvalue,-rank(prokka_protein_enrichments$odds_ratio)),]
+return(prokka_protein_enrichments)
+}
+
+get_COG_enrichments = function(not_group_interest_dt,group_interest_dt,cog_funcs,cog_category) {
+  setkey(group_interest_dt,V6)
+  unique_product_names = unique(group_interest_dt$V6)
+  #unique_product_names = unique_product_names[unique_product_names!= ""]
+  setkey(not_group_interest_dt,V6)
+  ## do enrichment
+  prokka_protein_enrichments = sapply(unique_product_names, function(protein_product) {
+    #present_group_interest = nrow(group_interest_dt[V6==protein_product])
+    present_group_interest = nrow(group_interest_dt[protein_product])
+    absent_group_interest = nrow(group_interest_dt) - present_group_interest
+    #present_not_group_interest = nrow(not_group_interest_dt[V6==protein_product])
+    present_not_group_interest = nrow(not_group_interest_dt[protein_product])
+    abscent_not_group_interest= nrow(not_group_interest_dt)-present_not_group_interest
+    # add 1 so I don't get INF
+    present_group_interest = present_group_interest + 1
+    absent_group_interest = absent_group_interest + 1
+    present_not_group_interest = present_not_group_interest + 1
+    abscent_not_group_interest = abscent_not_group_interest + 1
+    conting_tble = data.frame(group=c(present_group_interest,absent_group_interest),not_group=c(present_not_group_interest,abscent_not_group_interest))
+    rownames(conting_tble) = c("present","absent")
+    test= ""
+    pval = 1
+    if(sum(conting_tble>5) == 4) {
+      pval = chisq.test(conting_tble)$p.value
+      test = "chis_squared"
+    } else {
+      pval = fisher.test(conting_tble)$p.value
+      test = "fisher_exact"
+    }
+    odds_group = present_group_interest/absent_group_interest
+    odds_not_group = present_not_group_interest/abscent_not_group_interest
+    odds_ratio = odds_group/odds_not_group
+    CI = 1.96 * (sqrt(((1/present_group_interest)+(1/absent_group_interest)+(1/present_not_group_interest)+(1/abscent_not_group_interest))))
+    upper95_CI = exp((log(odds_ratio) + CI))
+    lower95_CI = exp((log(odds_ratio) - CI))
+    proportion_genes_in_cluster = present_group_interest/(present_group_interest+absent_group_interest)
+    proportion_genes_out_of_cluster = present_not_group_interest/(present_not_group_interest+abscent_not_group_interest)
+
+    output = c(pvalue=pval,odds_ratio=odds_ratio,upper95_CI=upper95_CI,lower95_CI=lower95_CI,percent_genes_annotated_to_COG_in_cluster=proportion_genes_in_cluster*100,percent_genes_annotated_to_COG_out_of_cluster=proportion_genes_out_of_cluster*100,present_group_interest_counts=present_group_interest,present_not_group_interest_counts=present_not_group_interest,test=test)
+    return(output)
+  })
+  prokka_protein_enrichments = t(prokka_protein_enrichments)
+  prokka_protein_enrichments = as.data.frame(prokka_protein_enrichments)
+  prokka_protein_enrichments$pvalue = as.numeric(prokka_protein_enrichments$pvalue)
+  prokka_protein_enrichments$odds_ratio = as.numeric(prokka_protein_enrichments$odds_ratio)
+  prokka_protein_enrichments$upper95_CI = as.numeric(prokka_protein_enrichments$upper95_CI)
+  prokka_protein_enrichments$lower95_CI = as.numeric(prokka_protein_enrichments$lower95_CI)
+  prokka_protein_enrichments$percent_genes_annotated_to_COG_out_of_cluster = as.numeric(prokka_protein_enrichments$percent_genes_annotated_to_COG_out_of_cluster)
+  prokka_protein_enrichments$percent_genes_annotated_to_COG_in_cluster = as.numeric(prokka_protein_enrichments$percent_genes_annotated_to_COG_in_cluster)
+  prokka_protein_enrichments$present_group_interest_counts = as.numeric(prokka_protein_enrichments$present_group_interest_counts)
+  prokka_protein_enrichments$present_not_group_interest_counts = as.numeric(prokka_protein_enrichments$present_not_group_interest_counts)
+  prokka_protein_enrichments$fdr = p.adjust(prokka_protein_enrichments$pvalue,method="BY")
+  prokka_protein_enrichments_sorted = prokka_protein_enrichments[base::order(prokka_protein_enrichments$pvalue,-rank(prokka_protein_enrichments$odds_ratio)),]
+  cog_funcs_sorted = cog_funcs[match(rownames(prokka_protein_enrichments_sorted),cog_funcs$V1),]
+  prokka_protein_enrichments_sorted$COG_name = cog_funcs_sorted$V3
+  prokka_protein_enrichments_sorted$COG_gene_name = cog_funcs_sorted$V4
+  prokka_protein_enrichments_sorted$COG_functional_pathway = cog_funcs_sorted$V5
+  prokka_protein_enrichments_sorted$COG_functional_cat = cog_funcs_sorted$V2
+  cog_cat_description_vec = sapply(strsplit(prokka_protein_enrichments_sorted$COG_functional_cat,split=""),function(x) paste(cog_category[match(x,cog_category[,1]),3],collapse="/"))
+  prokka_protein_enrichments_sorted$functional_cat_description = cog_cat_description_vec
+  prokka_protein_enrichments_sorted = cbind(COG=rownames(prokka_protein_enrichments_sorted),prokka_protein_enrichments_sorted)
+return(prokka_protein_enrichments_sorted)
+}
+
+get_EC_enrichments = function(not_group_interest_dt,group_interest_dt,EC_desc,EC_level) {
+  #2.7.2.1 is a level 4 annotation
+  #2.7.2.- is a level 3 annotation
+  #2.7.-.- is a level 2 annotation
+  #2.-.-.- is a level 1 annotation
+  if(EC_level == 1) {
+    setkey(group_interest_dt,EC_level1)
+    setkey(not_group_interest_dt,EC_level1)
+    unique_product_names = unique(group_interest_dt$EC_level1)
+    #unique_product_names = unique_product_names[unique_product_names!= ".-.-.-"]
+  } else if (EC_level==2) {
+    setkey(group_interest_dt,EC_level2)
+    setkey(not_group_interest_dt,EC_level2)
+    unique_product_names = unique(group_interest_dt$EC_level2)
+    #unique_product_names = unique_product_names[unique_product_names!= "..-.-"]
+  } else if (EC_level==3) {
+    setkey(group_interest_dt,EC_level3)
+    setkey(not_group_interest_dt,EC_level3)
+    unique_product_names = unique(group_interest_dt$EC_level3)
+    #unique_product_names = unique_product_names[unique_product_names!= "...-"]
+  } else {
+    setkey(group_interest_dt,V5)
+    setkey(not_group_interest_dt,V5)
+    unique_product_names = unique(group_interest_dt$V5)
+    #unique_product_names = unique_product_names[unique_product_names!= ""]
+  }
+  # basically we don't want to test 5.-.-.- when we specify EC level 2 cause that is level 1
+  unique_product_names_to_keepy = sapply(strsplit(unique_product_names,split="[.]"), function(x) {
+    number_dashes = sum(x=="-")
+    if(EC_level == 2 & number_dashes==3) {
+      return(FALSE)
+    }
+    if(EC_level == 3 & number_dashes>1) {
+      return(FALSE)
+    }
+    if(EC_level == 4 & number_dashes>0) {
+      return(FALSE)
+    }
+    return(TRUE)
+  })
+  unique_product_names = unique_product_names[unique_product_names_to_keepy]
+  ## do enrichment
+  prokka_protein_enrichments = sapply(unique_product_names, function(protein_product) {
+    if(EC_level == 1) {
+      #present_group_interest = nrow(group_interest_dt[EC_level1==protein_product])
+      #present_not_group_interest = nrow(not_group_interest_dt[EC_level1==protein_product])
+      present_group_interest = nrow(group_interest_dt[protein_product])
+      present_not_group_interest = nrow(not_group_interest_dt[protein_product])
+      
+    } else if(EC_level==2) {
+      #present_group_interest = nrow(group_interest_dt[EC_level2==protein_product])
+      #present_not_group_interest = nrow(not_group_interest_dt[EC_level2==protein_product])
+      present_group_interest = nrow(group_interest_dt[protein_product])
+      present_not_group_interest = nrow(not_group_interest_dt[protein_product])
+      
+    } else if(EC_level==3) {
+      #present_group_interest = nrow(group_interest_dt[EC_level3==protein_product])
+      #present_not_group_interest = nrow(not_group_interest_dt[EC_level3==protein_product])
+      present_group_interest = nrow(group_interest_dt[protein_product])
+      present_not_group_interest = nrow(not_group_interest_dt[protein_product])
+
+    } else {
+      #present_group_interest = nrow(group_interest_dt[V5==protein_product])
+      #present_not_group_interest = nrow(not_group_interest_dt[V5==protein_product])
+      present_group_interest = nrow(group_interest_dt[protein_product])
+      present_not_group_interest = nrow(not_group_interest_dt[protein_product])
+    }
+    absent_group_interest = nrow(group_interest_dt) - present_group_interest
+    abscent_not_group_interest= nrow(not_group_interest_dt)-present_not_group_interest
+    present_group_interest = present_group_interest + 1
+    absent_group_interest = absent_group_interest + 1
+    present_not_group_interest = present_not_group_interest + 1
+    abscent_not_group_interest = abscent_not_group_interest + 1
+    conting_tble = data.frame(group=c(present_group_interest,absent_group_interest),not_group=c(present_not_group_interest,abscent_not_group_interest))
+    rownames(conting_tble) = c("present","absent")
+    test= ""
+    pval = 1
+    if(sum(conting_tble>5) == 4) {
+      pval = chisq.test(conting_tble)$p.value
+      test = "chis_squared"
+    } else {
+      pval = fisher.test(conting_tble)$p.value
+      test = "fisher_exact"
+    }
+    odds_group = present_group_interest/absent_group_interest
+    odds_not_group = present_not_group_interest/abscent_not_group_interest
+    odds_ratio = odds_group/odds_not_group
+    CI = 1.96 * (sqrt(((1/present_group_interest)+(1/absent_group_interest)+(1/present_not_group_interest)+(1/abscent_not_group_interest))))
+    upper95_CI = exp((log(odds_ratio) + CI))
+    lower95_CI = exp((log(odds_ratio) - CI))
+    proportion_genes_in_cluster = present_group_interest/(present_group_interest+absent_group_interest)
+    proportion_genes_out_of_cluster = present_not_group_interest/(present_not_group_interest+abscent_not_group_interest)
+    
+    output = c(pvalue=pval,odds_ratio=odds_ratio,upper95_CI=upper95_CI,lower95_CI=lower95_CI,percent_genes_annotated_to_EC_in_cluster=proportion_genes_in_cluster*100,percent_genes_annotated_to_EC_out_of_cluster=proportion_genes_out_of_cluster*100,present_group_interest_counts=present_group_interest,present_not_group_interest_counts=present_not_group_interest,test=test)
+    return(output)
+  })
+  prokka_protein_enrichments = t(prokka_protein_enrichments)
+  prokka_protein_enrichments = as.data.frame(prokka_protein_enrichments)
+  prokka_protein_enrichments$pvalue = as.numeric(prokka_protein_enrichments$pvalue)
+  prokka_protein_enrichments$odds_ratio = as.numeric(prokka_protein_enrichments$odds_ratio)
+  prokka_protein_enrichments$upper95_CI = as.numeric(prokka_protein_enrichments$upper95_CI)
+  prokka_protein_enrichments$lower95_CI = as.numeric(prokka_protein_enrichments$lower95_CI)
+  prokka_protein_enrichments$percent_genes_annotated_to_EC_in_cluster = as.numeric(prokka_protein_enrichments$percent_genes_annotated_to_EC_in_cluster)
+  prokka_protein_enrichments$percent_genes_annotated_to_EC_out_of_cluster = as.numeric(prokka_protein_enrichments$percent_genes_annotated_to_EC_out_of_cluster)
+  prokka_protein_enrichments$present_group_interest_counts = as.numeric(prokka_protein_enrichments$present_group_interest_counts)
+  prokka_protein_enrichments$present_not_group_interest_counts = as.numeric(prokka_protein_enrichments$present_not_group_interest_counts)
+  prokka_protein_enrichments$fdr = p.adjust(prokka_protein_enrichments$pvalue,method="BY")
+  # if EC level is 4 then the description is pretty specific. I want to get the entire description! I could edit the description file but that feels logistically complicated so I will do something else complicated
+  if(EC_level!= 1 & EC_level!= 2 & EC_level!= 3) {
+    EC_split_temp = strsplit(rownames(prokka_protein_enrichments),split="[.]")
+    EC_description = sapply(EC_split_temp, function(x) {
+      original_EC = paste(x,collapse=".")
+      specific_desc = EC_desc[match(original_EC,EC_desc$V1),2]
+      number_dashes_temp = sum(x=="-")
+      if(number_dashes_temp == 0 & length(x) >0) {
+        x[4] = "-"
+        x_adjusted = paste(x,collapse=".")
+        general_EC = EC_desc[match(x_adjusted,EC_desc$V1),2]
+        specific_desc = paste(general_EC,specific_desc)
+      }
+      return(specific_desc)
+    })
+  } else {
+    # get description of EC ID. nothing complicated needed
+    EC_description = EC_desc[match(rownames(prokka_protein_enrichments),EC_desc$V1),2]
+  }
+  prokka_protein_enrichments$EC_description = EC_description
+  
+  prokka_protein_enrichments = cbind(EC_number=rownames(prokka_protein_enrichments),prokka_protein_enrichments)
+  prokka_protein_enrichments_sorted = prokka_protein_enrichments[base::order(prokka_protein_enrichments$pvalue,-rank(prokka_protein_enrichments$odds_ratio)),]
+return(prokka_protein_enrichments_sorted)
+}
+
+get_taxa_enrichment = function(taxa_annotations,cluster_number,sample_labels,taxa_level) {
+  samples_of_interest = sample_labels[sample_labels[,2] == cluster_number,1]
+  samples_not_of_interest = setdiff(sample_labels[,1],samples_of_interest)
+  df_of_interst = taxa_annotations[samples_of_interest]
+  df_not_of_interst = taxa_annotations[samples_not_of_interest]
+  ### first get list of taxa I want to test for enrichment
+  if(taxa_level=="superkingdom") {
+    unique_taxa_names = unique(df_of_interst$superkingdom)
+  } else if(taxa_level=="phylum") {
+    unique_taxa_names = unique(df_of_interst$phylum)
+  } else if(taxa_level=="class") {
+    unique_taxa_names = unique(df_of_interst$class)
+  } else if(taxa_level=="order") {
+    unique_taxa_names = unique(df_of_interst$order)
+  } else if(taxa_level=="family") {
+    unique_taxa_names = unique(df_of_interst$family)
+  } else if(taxa_level=="genus") {
+    unique_taxa_names = unique(df_of_interst$genus)
+  } else if(taxa_level=="species") {
+    unique_taxa_names = unique(df_of_interst$species)
+  }
+  #unique_taxa_names = unique_taxa_names[!is.na(unique_taxa_names)]
+  ## next do enrichment
+  taxa_enrichments = sapply(unique_taxa_names , function(mytaxa) {
+    if(taxa_level=="superkingdom") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[superkingdom==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[superkingdom==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(superkingdom)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(superkingdom)])
+      }
+    } else if(taxa_level=="phylum") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[phylum==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[phylum==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(phylum)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(phylum)])
+      }
+    } else if(taxa_level=="class") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[class==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[class==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(class)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(class)])
+      }
+    } else if(taxa_level=="order") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[order==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[order==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(order)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(order)])
+      }
+    } else if(taxa_level=="family") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[family==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[family==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(family)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(family)])
+      }
+    } else if(taxa_level=="genus") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[genus==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[genus==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(genus)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(genus)])
+      }
+    } else if(taxa_level=="species") {
+      if(!is.na(mytaxa)) {
+        present_group_interest = nrow(df_of_interst[species==mytaxa])
+        present_group_not_interest = nrow(df_not_of_interst[species==mytaxa])
+      } else {
+        present_group_interest = nrow(df_of_interst[is.na(species)])
+        present_group_not_interest = nrow(df_not_of_interst[is.na(species)])
+      }
+    }
+    absent_group_interest = nrow(df_of_interst) - present_group_interest
+    abscent_not_group_interest= nrow(df_not_of_interst)-present_group_not_interest
+    # make contigency table now
+    present_group_interest = present_group_interest + 1
+    absent_group_interest = absent_group_interest + 1
+    present_group_not_interest = present_group_not_interest + 1
+    abscent_not_group_interest = abscent_not_group_interest + 1
+    conting_tble = data.frame(group=c(present_group_interest,absent_group_interest),not_group=c(present_group_not_interest,abscent_not_group_interest))
+    rownames(conting_tble) = c("present","absent")
+    test= ""
+    pval = 1
+    if(sum(conting_tble>5) == 4) {
+      pval = chisq.test(conting_tble)$p.value
+      test = "chis_squared"
+    } else {
+      pval = fisher.test(conting_tble)$p.value
+      test = "fisher_exact"
+    }
+    odds_group = present_group_interest/absent_group_interest
+    odds_not_group = present_group_not_interest/abscent_not_group_interest
+    odds_ratio = odds_group/odds_not_group
+    CI = 1.96 * (sqrt(((1/present_group_interest)+(1/absent_group_interest)+(1/present_group_not_interest)+(1/abscent_not_group_interest))))
+    upper95_CI = exp((log(odds_ratio) + CI))
+    lower95_CI = exp((log(odds_ratio) - CI))
+    proportion_taxa_in_cluster = present_group_interest/(present_group_interest+absent_group_interest)
+    proportion_taxa_not_in_cluster = present_group_not_interest/(present_group_not_interest+abscent_not_group_interest)
+    output = c(pvalue=pval,odds_ratio=odds_ratio,upper95_CI=upper95_CI,lower95_CI=lower95_CI,percent_genes_annotated_to_taxa_in_cluster=proportion_taxa_in_cluster*100,percent_genes_annotated_to_taxa_out_of_cluster=proportion_taxa_not_in_cluster*100,present_group_interest_counts=present_group_interest,present_group_not_interest_counts=present_group_not_interest,test=test)
+    return(output)
+  })
+  taxa_enrichments = t(taxa_enrichments)
+  taxa_enrichments = as.data.frame(taxa_enrichments)
+  taxa_enrichments$pvalue = as.numeric(taxa_enrichments$pvalue)
+  taxa_enrichments$odds_ratio = as.numeric(taxa_enrichments$odds_ratio)
+  taxa_enrichments$upper95_CI = as.numeric(taxa_enrichments$upper95_CI)
+  taxa_enrichments$lower95_CI = as.numeric(taxa_enrichments$lower95_CI)
+  taxa_enrichments$percent_genes_annotated_to_taxa_in_cluster = as.numeric(taxa_enrichments$percent_genes_annotated_to_taxa_in_cluster)
+  taxa_enrichments$percent_genes_annotated_to_taxa_out_of_cluster = as.numeric(taxa_enrichments$percent_genes_annotated_to_taxa_out_of_cluster)
+  taxa_enrichments$present_group_interest_counts = as.numeric(taxa_enrichments$present_group_interest_counts)
+  taxa_enrichments$present_group_not_interest_counts = as.numeric(taxa_enrichments$present_group_not_interest_counts)
+
+  taxa_enrichments$fdr = p.adjust(taxa_enrichments$pvalue,method="BY")
+  taxa_enrichments_sorted = taxa_enrichments[base::order(taxa_enrichments$pvalue,-rank(taxa_enrichments$odds_ratio)),]
+  taxa_enrichments_sorted = cbind(taxa=rownames(taxa_enrichments_sorted),taxa_enrichments_sorted)
+  return(taxa_enrichments_sorted)
+}
+
+
+
+#get_taxa_enrichment_by_sample = function(taxa_annotations,cluster_number,sample_labels,taxa_level) {
+#  samples_of_interest = sample_labels[sample_labels[,2] == cluster_number,1]
+#  samples_not_interst = setdiff(sample_labels[,1],samples_of_interest)
+#  if(taxa_level == "superkingdom") {
+#    unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","superkingdom"))
+#  } else if(taxa_level=="phylum") {
+#     unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","phylum"))
+#  } else if(taxa_level=="class") {
+#     unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","class"))
+#  } else if(taxa_level=="order") {
+#    unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","order"))
+#  } else if(taxa_level=="family") {
+#    unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","family"))
+#  } else if(taxa_level=="genus") {
+#    unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","genus"))
+#  } else if(taxa_level=="species") {
+#    unique_taxa_per_sample = unique(taxa_annotations,by=c("sample","species"))
+#  }
+#  df_of_interst = unique_taxa_per_sample[samples_of_interest]
+#  df_not_of_interst = unique_taxa_per_sample[!unique_taxa_per_sample$sample%in%samples_of_interest]
+
+  ### first get list of taxa I want to test for enrichment
+#   if(taxa_level=="superkingdom") {
+#     unique_taxa_names = unique(df_of_interst$superkingdom)
+#   } else if(taxa_level=="phylum") {
+#     unique_taxa_names = unique(df_of_interst$phylum)
+#   } else if(taxa_level=="class") {
+#     unique_taxa_names = unique(df_of_interst$class)
+#   } else if(taxa_level=="order") {
+#     unique_taxa_names = unique(df_of_interst$order)
+#   } else if(taxa_level=="family") {
+#     unique_taxa_names = unique(df_of_interst$family)
+#   } else if(taxa_level=="genus") {
+#     unique_taxa_names = unique(df_of_interst$genus)
+#   } else if(taxa_level=="species") {
+#     unique_taxa_names = unique(df_of_interst$species)
+#   }
+#   #unique_taxa_names = unique_taxa_names[!is.na(unique_taxa_names)]
+#   ## next do enrichment
+#   taxa_enrichments = sapply(unique_taxa_names , function(mytaxa) {
+#     if(taxa_level=="superkingdom") {
+#       present_samples_group_interest = unique(df_of_interst[superkingdom==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[superkingdom==mytaxa,sample])
+#     } else if(taxa_level=="phylum") {
+#       present_samples_group_interest = unique(df_of_interst[phylum==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[phylum==mytaxa,sample])
+#     } else if(taxa_level=="class") {
+#       present_samples_group_interest = unique(df_of_interst[class==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[class==mytaxa,sample])
+#     } else if(taxa_level=="order") {
+#       present_samples_group_interest = unique(df_of_interst[order==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[order==mytaxa,sample])
+#     } else if(taxa_level=="family") {
+#       present_samples_group_interest = unique(df_of_interst[family==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[family==mytaxa,sample])
+#     } else if(taxa_level=="genus") {
+#       present_samples_group_interest = unique(df_of_interst[genus==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[genus==mytaxa,sample])
+#     } else if(taxa_level=="species") {
+#       present_samples_group_interest = unique(df_of_interst[species==mytaxa,sample])
+#       present_samples_group_not_interest = unique(df_not_of_interst[species==mytaxa,sample])
+#     }
+#     absent_samples_group_interset = setdiff(samples_of_interest,present_samples_group_interest)
+#     absent_samples_group_not_interset = setdiff(samples_not_interst,present_samples_group_not_interest)
+#     present_group_interest = length(present_samples_group_interest)
+#     present_group_not_interest = length(present_samples_group_not_interest)
+#     absent_group_interest = length(absent_samples_group_interset)
+#     absent_not_group_interest= length(absent_samples_group_not_interset)
+#     # make contigency table now
+#     conting_tble = data.frame(group=c(present_group_interest,absent_group_interest),not_group=c(present_group_not_interest,absent_not_group_interest))
+#     rownames(conting_tble) = c("present","absent")
+#     test= ""
+#     pval = 1
+#     if(sum(conting_tble>5) == 4) {
+#       pval = chisq.test(conting_tble)$p.value
+#       test = "chis_squared"
+#     } else {
+#       pval = fisher.test(conting_tble)$p.value
+#       test = "fisher_exact"
+#     }
+#     odds_group = present_group_interest/absent_group_interest
+#     odds_not_group = present_group_not_interest/abscent_not_group_interest
+#     odds_ratio = odds_group/odds_not_group
+#     CI = 1.96 * (sqrt(((1/present_group_interest)+(1/absent_group_interest)+(1/present_group_not_interest)+(1/abscent_not_group_interest))))
+#     upper95_CI = exp((log(odds_ratio) + CI))
+#     lower95_CI = exp((log(odds_ratio) - CI))
+#     proportion_taxa_in_cluster = present_group_interest/(present_group_interest+absent_group_interest)
+#     proportion_taxa_not_in_cluster = present_group_not_interest/(present_group_not_interest+abscent_not_group_interest)
+#     output = c(pvalue=pval,odds_ratio=odds_ratio,upper95_CI=upper95_CI,lower95_CI=lower95_CI,percent_genes_annotated_to_taxa_in_cluster=proportion_taxa_in_cluster*100,percent_genes_annotated_to_taxa_out_of_cluster=proportion_taxa_not_in_cluster*100,test=test)
+#     return(output)
+#   })
+#   taxa_enrichments = t(taxa_enrichments)
+#   taxa_enrichments = as.data.frame(taxa_enrichments)
+#   taxa_enrichments$pvalue = as.numeric(taxa_enrichments$pvalue)
+#   taxa_enrichments$odds_ratio = as.numeric(taxa_enrichments$odds_ratio)
+#   taxa_enrichments$upper95_CI = as.numeric(taxa_enrichments$upper95_CI)
+#   taxa_enrichments$lower95_CI = as.numeric(taxa_enrichments$lower95_CI)
+#   taxa_enrichments$percent_genes_annotated_to_taxa_in_cluster = as.numeric(taxa_enrichments$percent_genes_annotated_to_taxa_in_cluster)
+#   taxa_enrichments$percent_genes_annotated_to_taxa_out_of_cluster = as.numeric(taxa_enrichments$percent_genes_annotated_to_taxa_out_of_cluster)
+#   taxa_enrichments$fdr = p.adjust(taxa_enrichments$pvalue,method="BY")
+#   taxa_enrichments_sorted = taxa_enrichments[base::order(taxa_enrichments$pvalue,-rank(taxa_enrichments$odds_ratio)),]
+#   taxa_enrichments_sorted = cbind(taxa=rownames(taxa_enrichments_sorted),taxa_enrichments_sorted)
+#   return(taxa_enrichments_sorted)
+# }
+
+
+
+addEC_levels = function(mydt) {
+  mydt_EC_numbers_split = tstrsplit(mydt$V5,split="[.]",fill="")
+  #colV4 = mydt_EC_numbers_split[[4]]
+  #colV4[colV4!=""] = "-"
+  dash_col = rep("-",length(mydt_EC_numbers_split[[4]]))
+  EC_level3 = paste(mydt_EC_numbers_split[[1]],mydt_EC_numbers_split[[2]],mydt_EC_numbers_split[[3]],dash_col,sep=".")
+  EC_level2 = paste(mydt_EC_numbers_split[[1]],mydt_EC_numbers_split[[2]],dash_col,dash_col,sep=".")
+  EC_level1 = paste(mydt_EC_numbers_split[[1]],dash_col,dash_col,dash_col,sep=".")
+  mydt[, c("EC_level3", "EC_level2", "EC_level1") := list(EC_level3, EC_level2, EC_level1)]
+}
+
+get_all_enrichements = function(all_annotations,cluster_number,sample_labels,cog_funcs,cog_category,EC_desc,output_dir) {
+  print("prep input")
+  samples_of_interest = sample_labels[sample_labels[,2] == cluster_number,1]
+  samples_not_of_interest = setdiff(sample_labels[,1],samples_of_interest)
+  annotations_of_interest = all_annotations[samples_of_interest]
+  #annotations_of_interest = fread(annotations_of_interest_file,header=F)
+  #annotations_of_interest_CDS = annotations_of_interest[V2=="CDS"]
+  #print("adding EC levels")
+  #addEC_levels(annotations_of_interest_CDS)
+  #print("done adding EC levels")
+  all_annotations_not_interest = all_annotations[samples_not_of_interest]
+  print("find enriched prokka output")
+  prokka_protein_enriched = get_prokka_protein_enrichments(all_annotations_not_interest,annotations_of_interest)
+  print("find enriched COGs")
+  COG_enriched = get_COG_enrichments(all_annotations_not_interest,annotations_of_interest,cog_funcs,cog_category)
+  print("find enriched EC numbers")
+  EC_enriched_groups_level4 = get_EC_enrichments(all_annotations_not_interest,annotations_of_interest,EC_desc,EC_level=4)
+  EC_enriched_groups_level3 = get_EC_enrichments(all_annotations_not_interest,annotations_of_interest,EC_desc,EC_level=3)
+  EC_enriched_groups_level2 = get_EC_enrichments(all_annotations_not_interest,annotations_of_interest,EC_desc,EC_level=2)
+  EC_enriched_groups_level1 = get_EC_enrichments(all_annotations_not_interest,annotations_of_interest,EC_desc,EC_level=1)
+  EC_enriched_groups_all = get_EC_enrichments(all_annotations_not_interest,annotations_of_interest,EC_desc,EC_level="all")
+  print("enrichments done")
+  df_list = list(proteins=prokka_protein_enriched,COG=COG_enriched,EC_level4=EC_enriched_groups_level4,EC_level3=EC_enriched_groups_level3,EC_level2=EC_enriched_groups_level2,EC_level1=EC_enriched_groups_level1,EC_all=EC_enriched_groups_all)
+  #annotations_of_interest_basename = basename(annotations_of_interest_file)
+  write.table(prokka_protein_enriched,file=paste(output_dir,"/cluster",cluster_number,"_protein_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(COG_enriched,file=paste(output_dir,"/cluster",cluster_number,"_COG_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(EC_enriched_groups_level4,file=paste(output_dir,"/cluster",cluster_number,"_EC_L4_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(EC_enriched_groups_level3,file=paste(output_dir,"/cluster",cluster_number,"_EC_L3_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(EC_enriched_groups_level2,file=paste(output_dir,"/cluster",cluster_number,"_EC_L2_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(EC_enriched_groups_level1,file=paste(output_dir,"/cluster",cluster_number,"_EC_L1_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(EC_enriched_groups_all,file=paste(output_dir,"/cluster",cluster_number,"_EC_all_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  return(df_list)
+}
+
+get_all_taxa_enrichments = function(taxa_annotations, cluster_number,clusters_mems,output_dir) {
+  print("get kingdoms enriched")
+  kingdom_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_annotations,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="superkingdom")
+  print("get phylum enriched")
+  phylum_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="phylum")
+  print("get class enriched")
+  class_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="class")
+  print("get order enriched")
+  order_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="order")
+  print("get family enriched")
+  family_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="family")
+  print("get genus enriched")
+  genus_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="genus")
+  print("get species enriched")
+  species_enrichemnt = get_taxa_enrichment(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="species")
+
+  write.table(kingdom_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_kingdom_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(phylum_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_phylum_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(class_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_class_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(order_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_order_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(family_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_family_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(genus_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_genus_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  write.table(species_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_species_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+  
+df_list = list(kingdom=kingdom_enrichemnt,phylum=phylum_enrichemnt,class=class_enrichemnt,order=order_enrichemnt,family=family_enrichemnt,genus=genus_enrichemnt,species=species_enrichemnt)
+return(df_list)
+}
+
+# get_all_taxa_enrichments_bysample = function(taxa_annotations, cluster_number,clusters_mems,output_dir) {
+#   
+#   kingdom_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_annotations,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="superkingdom")
+#   phylum_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="phylum")
+#   class_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="class")
+#   order_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="order")
+#   family_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="family")
+#   genus_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="genus")
+#   species_enrichemnt = get_taxa_enrichment_by_sample(taxa_annotations=taxa_data,cluster_number = cluster_number,sample_labels = clusters_mems,taxa_level="species")
+# 
+#   write.table(kingdom_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_kingdom_enrichments.txt",sep=""),col.names=T,row.names=F)
+#   write.table(phylum_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_phylum_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+#   write.table(class_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_class_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+#   write.table(order_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_order_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+#   write.table(family_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_family_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+#   write.table(genus_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_genus_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+#   write.table(species_enrichemnt,file=paste(output_dir,"/cluster",cluster_number,"_species_enrichemnt_enrichments.txt",sep=""),col.names=T,row.names=F,quote=F,sep="\t")
+#   
+# df_list = list(kingdom=kingdom_enrichemnt,phylum=phylum_enrichemnt,class=class_enrichemnt,order=order_enrichemnt,family=family_enrichemnt,genus=genus_enrichemnt,species=species_enrichemnt)
+# return(df_list)
+# }
+
+
+library(data.table)
+consensus_seq_annotations = fread(cmd=paste("grep 'CDS' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v3.txt | grep -v 'ftype'"),header=F)
+# this function adds the columns in the input df by reference so we don't make it equal to anything
+addEC_levels(consensus_seq_annotations)
+consensus_seq_annotations[, c("sample") := tstrsplit(V1, split="_", fixed=TRUE, keep=c(1))]
+setkey(consensus_seq_annotations,sample)
+## load in the samples that belong in each of the UMAP clusters
+clusters_mem_all_samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_cluster_mem.txt",sep="\t",header=T)
+
+
+### make sure that we have gene annotation for the samples
+clusters_mem_all_samples_in_gene_annotations = clusters_mem_all_samples[clusters_mem_all_samples$sample%in%consensus_seq_annotations$sample,]
+
+cog_funcs = fread("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/cog-20.def.tab",header=FALSE,data.table = F)
+cog_category = read.table("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/fun-20.tab",header=F,sep="\t")
+EC_desc = read.table("/n/data1/joslin/icrb/kostic/szimmerman/all_EC_to_desc.txt",sep="\t",quote="")
+
+# cluster 1 is an environment cluster
+cluster1_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 1,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster1_gene_annotations")
+
+# cluster 2 is a smaller gut only cluster. mostly IBD genes from iHMP
+cluster2_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 2,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster2_gene_annotations")
+
+# clusrter 3 is a smaller cluster that broke off from the oral+ cluster
+cluster3_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 3,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster3_gene_annotations")
+# cluster 4 is the oral+ cluster
+cluster4_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 4,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster4_gene_annotations")
+
+# cluster 5 is a baby env cluster
+cluster5_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 5,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster5_gene_annotations")
+# cluster 6 is also a baby env cluster
+cluster6_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 6,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster6_gene_annotations")
+# cluster 7 is the big gut clusters
+cluster7_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 7,sample_labels = clusters_mem_all_samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster7_gene_annotations")
+
+
+### now run the gene enrichments for the sub clusters of cluster 4
+#clusters_mem_cluster4samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster4_reclustering_enrichments/umap_cluster4_louvain_50neighbors_cluster_mem.txt",sep="\t",header=T)
+### make sure that we have gene annotation for the samples
+#clusters_mem_cluster4samples_in_gene_annotations = clusters_mem_cluster4samples[clusters_mem_cluster4samples$sample%in%consensus_seq_annotations$sample,]
+
+## I think this is skin and nasal if I read my plots correctly
+#cluster4_subcluster1_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 1,sample_labels = clusters_mem_cluster4samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster4_reclustering_enrichments/cluster4_subcluster1_gene_annotations")
+
+## seems like a mix of oral, nasal, gut. its the islands. I think it includes western, IBD and RA samples
+#cluster4_subcluster2_gene_annotations = get_all_enrichements(all_annotations=consensus_seq_annotations,cluster_number = 2,sample_labels = clusters_mem_cluster4samples_in_gene_annotations, cog_funcs=cog_funcs,cog_category=cog_category,EC_desc=EC_desc,output_dir = "/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster4_reclustering_enrichments/cluster4_subcluster2_gene_annotations")
+
+## get taxonomy data table
+taxa_data = fread("/n/scratch3/users/s/sez10/gene_catalogue/enrichment/consensus_gene_taxa.txt",sep="\t",header=T)
+setkey(taxa_data,sample)
+
+clusters_mem_all_samples_in_taxa_annotations = clusters_mem_all_samples[clusters_mem_all_samples$sample%in%taxa_data$sample,]
+
+# cluster 1 is a big env cluster
+all_taxa_enrichments_cluster1 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=1,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster1_enrichments_taxa")
+# cluster 2 is the smaller, gut only, mainly disease cluster
+all_taxa_enrichments_cluster2 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=2,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster2_enrichments_taxa")
+# cluster 3 is a smaller cluster broken off from the oral+ cluster. it has lots of non western samples
+all_taxa_enrichments_cluster3 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=3,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster3_enrichments_taxa")
+# cluster 4 is the big oral+ cluster
+all_taxa_enrichments_cluster4 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=4,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster4_enrichments_taxa")
+# cluster 5 is a small env cluster
+all_taxa_enrichments_cluster5 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=5,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster5_enrichments_taxa")
+# cluster 6 is also a small env cluster
+all_taxa_enrichments_cluster6 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=6,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster6_enrichments_taxa")
+# cluster 7 is the big gut cluster
+all_taxa_enrichments_cluster7 = get_all_taxa_enrichments(taxa_annotations=taxa_data,cluster_number=7,clusters_mems=clusters_mem_all_samples_in_taxa_annotations,output_dir="/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/cluster7_enrichments_taxa")
+
+
+```
