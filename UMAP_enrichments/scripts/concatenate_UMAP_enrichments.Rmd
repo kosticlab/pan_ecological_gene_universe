@@ -1,0 +1,53 @@
+---
+title: "concatenate_UMAP_enrichments"
+author: "Sam Zimmerman"
+date: '2022-07-12'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/")
+```
+
+#Get all taxa enrichment files
+
+```{r}
+library(data.table)
+taxa_enrichment_files = list.files(pattern="enrichemnt_enrichments.txt",recursive = TRUE,full.names = TRUE)
+taxa_enrichment_files = taxa_enrichment_files[-grep("_taxa_old",taxa_enrichment_files)]
+taxaEnrichment_table_list = lapply(taxa_enrichment_files, function(myfile) {
+  mydt = fread(myfile,sep="\t",header=TRUE)
+  myfile_name_split = strsplit(myfile,split="_")[[1]]
+  taxaRank = myfile_name_split[4]
+  clusterNum = basename(myfile_name_split[1])
+  mydt[, taxaLevel := taxaRank]
+  mydt[, clusterNum := clusterNum]
+  return(mydt)
+})
+
+all_dt_taxa = do.call("rbind",taxaEnrichment_table_list)
+write.table(all_dt_taxa,"taxa_enrichment_table_all_clusters.tsv",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+write.csv(all_dt_taxa,"taxa_enrichment_table_all_clusters.csv",row.names=FALSE,quote=FALSE)
+
+# now do same for genes
+
+gene_enrichment_files = list.files(pattern="protein_enrichments.txt",recursive=TRUE,full.names = TRUE)
+gene_enrichment_files = gene_enrichment_files[-grep("gene_annotations_old",gene_enrichment_files)]
+geneEnrichment_table_list = lapply(gene_enrichment_files, function(myfile) {
+  mydt = fread(myfile,sep="\t",header=TRUE)
+  myfile_name_split = strsplit(basename(myfile),split="_")[[1]]
+  clusterNum = myfile_name_split[1]
+  mydt[, clusterNum := clusterNum]
+  return(mydt)
+})
+
+all_dt_genes = do.call("rbind",geneEnrichment_table_list)
+write.table(all_dt_genes,"gene_enrichment_table_all_clusters.csv",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+write.csv(all_dt_genes,"gene_enrichment_table_all_clusters.csv",row.names=FALSE,quote=FALSE)
+
+```
+

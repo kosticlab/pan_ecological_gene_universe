@@ -121,7 +121,8 @@ visualize_umap_clusters = function(umap_embeddings,clusterLabels,stats) {
   mydf$shape[(is.na(mydf$cluster))] = "NA"
   mydf$shape = as.factor(mydf$shape)
 
-  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0.1)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black")) +xlab("") + ylab("") + ggtitle(paste("silhouette score:",round(stats[1],digits=3),sep=""))
+  title_temp = paste("silhouette score:",round(stats[1],digits=3),"\nunclustered points: ",stats[6],sep="")
+  myplot = ggplot(mydf, aes(x=x, y=y,color=cluster)) + geom_point(aes(shape=shape),size=.4,alpha=.9) + scale_shape_manual(values=c(16,1)) + scale_alpha_manual(values=c(0.5,0.1)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill="black"), axis.line = element_line(colour = "black")) +xlab("") + ylab("") + ggtitle(title_temp)
     return(myplot)
 }
 
@@ -146,13 +147,11 @@ minclust_list_50PC = lapply(umap_50PCs_res_hdbscan, function(y) sapply(y, functi
 nneighbors_list_50PC = lapply(umap_50PCs_res_hdbscan, function(y) sapply(y, function(x) x[[3]][[2]]))
 mindist_list_50PC = lapply(umap_50PCs_res_hdbscan, function(y) sapply(y, function(x) x[[3]][[3]]))
 
-
 for(k in 1:length(ggplots_50PCs)) {
   ggplots_xxPCs_minclust_temp = ggplots_50PCs[[k]]
   minclust_size_temp = minclust_list_50PC[[k]]
   mindist_size_temp = mindist_list_50PC[[k]]
   nneighbors_size_temp = nneighbors_list_50PC[[k]]
-
   # prepare row and column labels for plots
   column_titles = rep("",length(ggplots_xxPCs_minclust_temp))
   row_titles = rep("",length(ggplots_xxPCs_minclust_temp))
@@ -168,7 +167,7 @@ for(k in 1:length(ggplots_50PCs)) {
   })
   # write plots to files
   #pdf(paste("umaps_multi_params/ggplots_50PCs_minclust_",minclust_size_temp,".pdf",sep=""),width=18,height=18)
-  pdf(paste("umaps_multi_params/ggplots_50PCs_minclust_",minclust_size_temp,"_v2.pdf",sep=""),width=18,height=18)
+  pdf(paste("umaps_multi_params/ggplots_50PCs_minclust_",minclust_size_temp,"_v2.pdf",sep=""),width=18,height=11)
   grid.arrange(grobs = ggplots_xxPCs_minclust_temp, ncol = 4)
   dev.off()
 }

@@ -359,8 +359,525 @@ dev.off()
 
 
 
+##Enrichments using taxa annotations of raw genes instead of consensus genes
+
+```{r}
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+pvals_each_cluster_each_rank = readRDS("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/pvals_each_cluster_each_rank.rds")
+
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[1]])
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_superkingdom , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_superkingdom, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_superkingdom, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
 
 
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[2]])
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum, function(x) x %>% head(10))
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[3]])
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class, function(x) x %>% head(10))
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[4]])
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order, function(x) x %>% head(10))
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[5]])
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family, function(x) x %>% head(10))
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[6]])
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus, function(x) x %>% head(10))
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[7]])
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species, function(x) x %>% head(10))
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+
+
+species_phylum = unique(unlist(lapply(pvals_each_cluster_each_species, function(x) x$phylum)))
+genus_phylum = unique(unlist(lapply(pvals_each_cluster_each_genus, function(x) x$phylum)))
+class_phylum = unique(unlist(lapply(pvals_each_cluster_each_class, function(x) x$phylum)))
+order_phylum = unique(unlist(lapply(pvals_each_cluster_each_order, function(x) x$phylum)))
+family_phylum = unique(unlist(lapply(pvals_each_cluster_each_family, function(x) x$phylum)))
+phylum_phylum = unique(unlist(lapply(pvals_each_cluster_each_phylum, function(x) x$phylum)))
+
+unique(c(species_phylum,genus_phylum,class_phylum,order_phylum,family_phylum,phylum_phylum))
+
+p1 = ggplot(pvals_each_cluster_each_phylum[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p2 = ggplot(pvals_each_cluster_each_phylum[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p3 = ggplot(pvals_each_cluster_each_phylum[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p4 = ggplot(pvals_each_cluster_each_phylum[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p5 = ggplot(pvals_each_cluster_each_phylum[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p6 = ggplot(pvals_each_cluster_each_phylum[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p7 = ggplot(pvals_each_cluster_each_phylum[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+c1 = ggplot(pvals_each_cluster_each_class[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c2 = ggplot(pvals_each_cluster_each_class[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c3 = ggplot(pvals_each_cluster_each_class[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c4 = ggplot(pvals_each_cluster_each_class[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c5 = ggplot(pvals_each_cluster_each_class[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c6 = ggplot(pvals_each_cluster_each_class[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c7 = ggplot(pvals_each_cluster_each_class[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+o1 = ggplot(pvals_each_cluster_each_order[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o2 = ggplot(pvals_each_cluster_each_order[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o3 = ggplot(pvals_each_cluster_each_order[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o4 = ggplot(pvals_each_cluster_each_order[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o5 = ggplot(pvals_each_cluster_each_order[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o6 = ggplot(pvals_each_cluster_each_order[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o7 = ggplot(pvals_each_cluster_each_order[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+f1 = ggplot(pvals_each_cluster_each_family[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f2 = ggplot(pvals_each_cluster_each_family[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f3 = ggplot(pvals_each_cluster_each_family[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f4 = ggplot(pvals_each_cluster_each_family[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f5 = ggplot(pvals_each_cluster_each_family[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f6 = ggplot(pvals_each_cluster_each_family[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f7 = ggplot(pvals_each_cluster_each_genus[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+g1 = ggplot(pvals_each_cluster_each_genus[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g2 = ggplot(pvals_each_cluster_each_genus[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g3 = ggplot(pvals_each_cluster_each_genus[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g4 = ggplot(pvals_each_cluster_each_genus[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g5 = ggplot(pvals_each_cluster_each_genus[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g6 = ggplot(pvals_each_cluster_each_genus[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g7 = ggplot(pvals_each_cluster_each_genus[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+s1 = ggplot(pvals_each_cluster_each_species[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s2 = ggplot(pvals_each_cluster_each_species[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s3 = ggplot(pvals_each_cluster_each_species[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s4 = ggplot(pvals_each_cluster_each_species[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s5 = ggplot(pvals_each_cluster_each_species[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s6 = ggplot(pvals_each_cluster_each_species[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s7 = ggplot(pvals_each_cluster_each_species[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2) + ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+pdf('odds_ratios_histograms_plots_taxa_revision.pdf',width=16,height=16)
+plot_grid(g1,g2,g3,g4,g5,g6,g7,c1,c2,c3,c4,c5,c6,c7,p1,p2,p3,p4,p5,p6,p7,ncol=7,align = 'v')
+dev.off()
+
+ggplotList = list(g1,g2,g3,g4,g5,g6,g7,c1,c2,c3,c4,c5,c6,c7,p1,p2,p3,p4,p5,p6,p7)
+names(ggplotList) = c("g1","g2","g3","g4","g5","g6","g7","c1","c2","c3","c4","c5","c6","c7","p1","p2","p3","p4","p5","p6","p7")
+for(x in 1:length(ggplotList)) {
+  myplot = ggplotList[[x]]
+  plotname = names(ggplotList)[x]
+  pdf(paste(plotname,"revision.pdf"),width=3,height=1.75)
+  print(myplot)
+  dev.off()
+}
+```
+
+#Same thing but one sided
+
+```{r}
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+pvals_each_cluster_each_rank = readRDS("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/pvals_each_cluster_each_rank_onesided.rds")
+
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[1]])
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_superkingdom , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_superkingdom, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_superkingdom, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+
+
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[2]])
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum, function(x) x %>% head(10))
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_phylum, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[3]])
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class, function(x) x %>% head(10))
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_class, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[4]])
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order, function(x) x %>% head(10))
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_order, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[5]])
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family, function(x) x %>% head(10))
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_family, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[6]])
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus, function(x) x %>% head(10))
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_genus, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[7]])
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species , function(x) x %>% filter(pval<0.05) %>% mutate(log_odds_ratio = log(odds_ratio),log_CI=log(CI),log_upper_95=log(upper95_CI),log_lower95_CI=log(lower95_CI))) 
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species, function(x) x %>% arrange(pval,desc(abs(odds_ratio))))
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species, function(x) x %>% head(10))
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_species, function(x) {
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  return(x)
+})
+
+
+species_phylum = unique(unlist(lapply(pvals_each_cluster_each_species, function(x) x$phylum)))
+genus_phylum = unique(unlist(lapply(pvals_each_cluster_each_genus, function(x) x$phylum)))
+class_phylum = unique(unlist(lapply(pvals_each_cluster_each_class, function(x) x$phylum)))
+order_phylum = unique(unlist(lapply(pvals_each_cluster_each_order, function(x) x$phylum)))
+family_phylum = unique(unlist(lapply(pvals_each_cluster_each_family, function(x) x$phylum)))
+phylum_phylum = unique(unlist(lapply(pvals_each_cluster_each_phylum, function(x) x$phylum)))
+
+unique(c(species_phylum,genus_phylum,class_phylum,order_phylum,family_phylum,phylum_phylum))
+
+p1 = ggplot(pvals_each_cluster_each_phylum[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p2 = ggplot(pvals_each_cluster_each_phylum[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p3 = ggplot(pvals_each_cluster_each_phylum[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p4 = ggplot(pvals_each_cluster_each_phylum[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p5 = ggplot(pvals_each_cluster_each_phylum[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p6 = ggplot(pvals_each_cluster_each_phylum[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p7 = ggplot(pvals_each_cluster_each_phylum[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+c1 = ggplot(pvals_each_cluster_each_class[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c2 = ggplot(pvals_each_cluster_each_class[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c3 = ggplot(pvals_each_cluster_each_class[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c4 = ggplot(pvals_each_cluster_each_class[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c5 = ggplot(pvals_each_cluster_each_class[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c6 = ggplot(pvals_each_cluster_each_class[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c7 = ggplot(pvals_each_cluster_each_class[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+o1 = ggplot(pvals_each_cluster_each_order[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o2 = ggplot(pvals_each_cluster_each_order[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o3 = ggplot(pvals_each_cluster_each_order[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o4 = ggplot(pvals_each_cluster_each_order[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o5 = ggplot(pvals_each_cluster_each_order[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o6 = ggplot(pvals_each_cluster_each_order[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o7 = ggplot(pvals_each_cluster_each_order[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+f1 = ggplot(pvals_each_cluster_each_family[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f2 = ggplot(pvals_each_cluster_each_family[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f3 = ggplot(pvals_each_cluster_each_family[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f4 = ggplot(pvals_each_cluster_each_family[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f5 = ggplot(pvals_each_cluster_each_family[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f6 = ggplot(pvals_each_cluster_each_family[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f7 = ggplot(pvals_each_cluster_each_genus[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+g1 = ggplot(pvals_each_cluster_each_genus[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g2 = ggplot(pvals_each_cluster_each_genus[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g3 = ggplot(pvals_each_cluster_each_genus[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g4 = ggplot(pvals_each_cluster_each_genus[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g5 = ggplot(pvals_each_cluster_each_genus[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g6 = ggplot(pvals_each_cluster_each_genus[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g7 = ggplot(pvals_each_cluster_each_genus[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+s1 = ggplot(pvals_each_cluster_each_species[[2]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s2 = ggplot(pvals_each_cluster_each_species[[3]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s3 = ggplot(pvals_each_cluster_each_species[[4]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s4 = ggplot(pvals_each_cluster_each_species[[5]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s5 = ggplot(pvals_each_cluster_each_species[[6]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s6 = ggplot(pvals_each_cluster_each_species[[7]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2)+ ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s7 = ggplot(pvals_each_cluster_each_species[[8]],aes(x=taxa,y=log_odds_ratio)) + geom_bar(stat="identity") + coord_flip() + geom_errorbar(aes(ymin=log_lower95_CI, ymax=log_upper_95), width=.2) + ylab("") + xlab("") + scale_y_continuous(limits = c(-8, 9)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+ggplotList = list(g1,g2,g3,g4,g5,g6,g7,c1,c2,c3,c4,c5,c6,c7,p1,p2,p3,p4,p5,p6,p7)
+names(ggplotList) = c("g1","g2","g3","g4","g5","g6","g7","c1","c2","c3","c4","c5","c6","c7","p1","p2","p3","p4","p5","p6","p7")
+for(x in 1:length(ggplotList)) {
+  myplot = ggplotList[[x]]
+  plotname = names(ggplotList)[x]
+  pdf(paste(plotname,"_one_sided_revision.pdf"),width=3,height=1.75)
+  print(myplot)
+  dev.off()
+}
+
+```
+
+##Do another version where I use the results from ttest instead of fishers exact test with the raw genes
+
+```{r}
+library(dplyr)
+setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/UMAP_enrichment3_BY/')
+
+#put all pvalues in single document for figshare
+
+prep_doc_figshare = function(rdsfile,taxa_level) {
+  ttest_res_class = readRDS(rdsfile)
+  ttest_res_class = lapply(ttest_res_class, as.data.frame)
+  ttest_res_class2 = list()
+  for(mycount in 1:length(ttest_res_class)) {
+     x = ttest_res_class[[mycount]]
+     x$logFC = log2(x$fold_change)
+     if(taxa_level == "phylum" | taxa_level == "superkingdom") {
+       x$taxa = rownames(x)
+       x$phylum = rownames(x)
+     } else {
+       x$phylum = sapply(strsplit(rownames(x),split="_"), function(y) y[length(y)])
+       x$taxa = sapply(strsplit(rownames(x),split="_"), function(y) paste(y[-length(y)],collapse="_"))
+     }
+     x$cluster = mycount
+     x$taxa_level = taxa_level
+     x = x[order(x$pvalue),]
+     ttest_res_class2[[mycount]] = x
+  }
+  ttest_res_class2 = do.call("rbind",ttest_res_class2)
+  return(ttest_res_class2)
+}
+
+class_df = prep_doc_figshare(rdsfile="ttest_res_class.rds",taxa_level="class")
+family_df = prep_doc_figshare(rdsfile="ttest_res_family.rds",taxa_level="family")
+genus_df = prep_doc_figshare(rdsfile="ttest_res_genus.rds",taxa_level="genus")
+species_df = prep_doc_figshare(rdsfile="ttest_res_species.rds",taxa_level="species")
+phylum_df = prep_doc_figshare(rdsfile="ttest_res_phylum.rds",taxa_level="phylum")
+superkingdom_df = prep_doc_figshare(rdsfile="ttest_res_superkingdom.rds",taxa_level="superkingdom")
+
+all_enrichment_pvals_df = rbind(superkingdom_df,phylum_df,class_df,family_df,genus_df,species_df)
+write.csv(all_enrichment_pvals_df,"taxa_enrichment_table_all_clusters_revised.csv")
+
+
+ttest_res_class = readRDS("ttest_res_class.rds")
+ttest_res_class = lapply(ttest_res_class, as.data.frame)
+ttest_res_class2 = list()
+for(mycount in 1:length(ttest_res_class)) {
+  x = ttest_res_class[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$phylum = sapply(strsplit(rownames(x),split="_"), function(y) y[length(y)])
+  x$taxa = sapply(strsplit(rownames(x),split="_"), function(y) paste(y[-length(y)],collapse="_"))
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_class2[[mycount]] = x
+}
+
+ttest_res_family = readRDS("ttest_res_family.rds")
+ttest_res_family = lapply(ttest_res_family, as.data.frame)
+ttest_res_family2 = list()
+for(mycount in 1:length(ttest_res_family)) {
+  x = ttest_res_family[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$phylum = sapply(strsplit(rownames(x),split="_"), function(y) y[length(y)])
+  x$taxa = sapply(strsplit(rownames(x),split="_"), function(y) paste(y[-length(y)],collapse="_"))
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_family2[[mycount]] = x
+}
+
+ttest_res_genus = readRDS("ttest_res_genus.rds")
+ttest_res_genus = lapply(ttest_res_genus, as.data.frame)
+ttest_res_genus2 = list()
+all_phylums_per_enriched_genus = c()
+for(mycount in 1:length(ttest_res_genus)) {
+  x = ttest_res_genus[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$phylum = sapply(strsplit(rownames(x),split="_"), function(y) y[length(y)])
+  x$taxa = sapply(strsplit(rownames(x),split="_"), function(y) paste(y[-length(y)],collapse="_"))
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_genus2[[mycount]] = x
+  all_phylums_per_enriched_genus = c(all_phylums_per_enriched_genus,unique(x$phylum[1:10]))
+}
+all_phylums_per_enriched_genus = unique(all_phylums_per_enriched_genus)
+all_phylums_per_enriched_genus = all_phylums_per_enriched_genus[!is.na(all_phylums_per_enriched_genus)]
+
+ttest_res_order = readRDS("ttest_res_order.rds")
+ttest_res_order = lapply(ttest_res_order, as.data.frame)
+ttest_res_order2 = list()
+for(mycount in 1:length(ttest_res_order)) {
+  x = ttest_res_order[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$phylum = sapply(strsplit(rownames(x),split="_"), function(y) y[length(y)])
+  x$taxa = sapply(strsplit(rownames(x),split="_"), function(y) paste(y[-length(y)],collapse="_"))
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_order2[[mycount]] = x
+}
+
+ttest_res_species = readRDS("ttest_res_species.rds")
+ttest_res_species = lapply(ttest_res_species, as.data.frame)
+ttest_res_species2 = list()
+for(mycount in 1:length(ttest_res_species)) {
+  x = ttest_res_species[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$phylum = sapply(strsplit(rownames(x),split="_"), function(y) y[length(y)])
+  x$taxa = sapply(strsplit(rownames(x),split="_"), function(y) paste(y[-length(y)],collapse="_"))
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_species2[[mycount]] = x
+}
+
+ttest_res_phylum = readRDS("ttest_res_phylum.rds")
+ttest_res_phylum = lapply(ttest_res_phylum, as.data.frame)
+ttest_res_phylum2 = list()
+for(mycount in 1:length(ttest_res_phylum)) {
+  x = ttest_res_phylum[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$taxa = rownames(x)
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_phylum2[[mycount]] = x
+}
+
+ttest_res_superkingdom = readRDS("ttest_res_superkingdom.rds")
+ttest_res_superkingdom = lapply(ttest_res_superkingdom, as.data.frame)
+ttest_res_superkingdom2 = list()
+for(mycount in 1:length(ttest_res_superkingdom)) {
+  x = ttest_res_superkingdom[[mycount]]
+  x$logFC = log2(x$fold_change)
+  x = x %>% filter(BY<0.05) %>% arrange(pvalue,desc(abs(logFC)))
+  x$taxa = rownames(x)
+  x$taxa = factor(x$taxa,levels=x$taxa)
+  ttest_res_superkingdom2[[mycount]] = x
+}
+
+
+c1 = ttest_res_class2[[1]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c2 = ttest_res_class2[[2]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c3 = ttest_res_class2[[3]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c4 = ttest_res_class2[[4]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c5 = ttest_res_class2[[5]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c6 = ttest_res_class2[[6]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+c7 = ttest_res_class2[[7]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+
+p1 = ttest_res_phylum2[[1]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p2 = ttest_res_phylum2[[2]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p3 = ttest_res_phylum2[[3]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p4 = ttest_res_phylum2[[4]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p5 = ttest_res_phylum2[[5]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p6 = ttest_res_phylum2[[6]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+p7 = ttest_res_phylum2[[7]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+o1 = ttest_res_order2[[1]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o2 = ttest_res_order2[[2]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o3 = ttest_res_order2[[3]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o4 = ttest_res_order2[[4]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o5 = ttest_res_order2[[5]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o6 = ttest_res_order2[[6]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+o7 = ttest_res_order2[[7]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+
+f1 = ttest_res_family2[[1]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f2 = ttest_res_family2[[2]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f3 = ttest_res_family2[[3]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f4 = ttest_res_family2[[4]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f5 = ttest_res_family2[[5]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f6 = ttest_res_family2[[6]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+f7 = ttest_res_family2[[7]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+g1 = ttest_res_genus2[[1]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g2 = ttest_res_genus2[[2]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g3 = ttest_res_genus2[[3]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g4 = ttest_res_genus2[[4]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g5 = ttest_res_genus2[[5]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g6 = ttest_res_genus2[[6]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+g7 = ttest_res_genus2[[7]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+write.csv(ttest_res_genus2[[3]],file="ttest_res_genus2.csv")
+
+s1 = ttest_res_species2[[1]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s2 = ttest_res_species2[[2]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s3 = ttest_res_species2[[3]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s4 = ttest_res_species2[[4]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s5 = ttest_res_species2[[5]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s6 = ttest_res_species2[[6]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+s7 = ttest_res_species2[[7]] %>% head(10) %>% ggplot(aes(x=taxa,y=logFC)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme(axis.text.x = element_text(size=2), axis.text.y = element_text(size=7))
+
+
+
+ggplotList = list(g1,g2,g3,g4,g5,g6,g7,c1,c2,c3,c4,c5,c6,c7,p1,p2,p3,p4,p5,p6,p7)
+names(ggplotList) = c("g1","g2","g3","g4","g5","g6","g7","c1","c2","c3","c4","c5","c6","c7","p1","p2","p3","p4","p5","p6","p7")
+for(x in 1:length(ggplotList)) {
+  myplot = ggplotList[[x]]
+  plotname = names(ggplotList)[x]
+  pdf(paste(plotname,"_one_sided_revision_ttest_res.pdf"),width=3,height=1.75)
+  print(myplot)
+  dev.off()
+}
+
+my_colors = pals::alphabet(length(all_phylums_per_enriched_genus))
+names(my_colors) = all_phylums_per_enriched_genus
+
+pdf("genus_cluster1_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust1_top10 = ttest_res_genus2[[1]] %>% head(10)
+ttest_res_genus2_clust1_top10$phylum = factor(ttest_res_genus2_clust1_top10$phylum,levels=all_phylums_per_enriched_genus)
+g1_colored = ttest_res_genus2_clust1_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=5)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g1_colored)
+dev.off()
+pdf("genus_cluster2_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust2_top10 = ttest_res_genus2[[2]] %>% head(10)
+ttest_res_genus2_clust2_top10$phylum = factor(ttest_res_genus2_clust2_top10$phylum,levels=all_phylums_per_enriched_genus)
+g2_colored = ttest_res_genus2_clust2_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=7)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g2_colored)
+dev.off()
+pdf("genus_cluster3_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust3_top10 = ttest_res_genus2[[3]] %>% head(10)
+ttest_res_genus2_clust3_top10$phylum = factor(ttest_res_genus2_clust3_top10$phylum,levels=all_phylums_per_enriched_genus)
+g3_colored = ttest_res_genus2_clust3_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=7)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g3_colored)
+dev.off()
+pdf("genus_cluster4_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust4_top10 = ttest_res_genus2[[4]] %>% head(10)
+ttest_res_genus2_clust4_top10$phylum = factor(ttest_res_genus2_clust4_top10$phylum,levels=all_phylums_per_enriched_genus)
+g4_colored = ttest_res_genus2_clust4_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=7)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g4_colored)
+dev.off()
+pdf("genus_cluster5_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust5_top10 = ttest_res_genus2[[5]] %>% head(10)
+ttest_res_genus2_clust5_top10$phylum = factor(ttest_res_genus2_clust5_top10$phylum,levels=all_phylums_per_enriched_genus)
+g5_colored = ttest_res_genus2_clust5_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=7)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g5_colored)
+dev.off()
+pdf("genus_cluster6_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust6_top10 = ttest_res_genus2[[6]] %>% head(10)
+ttest_res_genus2_clust6_top10$phylum = factor(ttest_res_genus2_clust6_top10$phylum,levels=all_phylums_per_enriched_genus)
+g6_colored = ttest_res_genus2_clust6_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=7)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g6_colored)
+dev.off()
+pdf("genus_cluster7_one_sided_colored_enrichment_ttest.pdf",width=2.65,height=1.15)
+ttest_res_genus2_clust7_top10 = ttest_res_genus2[[7]] %>% head(10)
+ttest_res_genus2_clust7_top10$phylum = factor(ttest_res_genus2_clust7_top10$phylum,levels=all_phylums_per_enriched_genus)
+g7_colored = ttest_res_genus2_clust7_top10 %>% ggplot(aes(x=reorder(taxa,logFC),y=logFC,fill=phylum)) + geom_bar(stat="identity") + coord_flip() + ylab("") + xlab("") + scale_y_continuous(limits = c(0, 11)) + theme_classic() + theme(axis.text.x = element_text(size=4), axis.text.y = element_text(size=7)) + scale_fill_manual(values=my_colors) + theme(legend.position="none")
+print(g7_colored)
+dev.off()
+```
 
 
 

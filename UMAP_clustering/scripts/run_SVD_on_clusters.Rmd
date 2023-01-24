@@ -14,8 +14,85 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{bash}
 #sbatch -p highmem -c 1 -t 0-11:59 --mem=200G calc_svd.bash /n/scratch3/users/b/btt5/orfletonv2/clustered_data/pan/multi_map_30_collapsed_processed.csv 0
 
-sbatch -p highmem -c 1 -t 0-11:59 --mem=400G calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv 0
+#sbatch -p highmem -c 1 -t 0-11:59 --mem=400G calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv 0
+
+sbatch -p highmem -c 10 -t 0-11:59 --mem=400G calc_svd.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv 0 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv NA clustered_30perc_gene_number 10
+
+sbatch -p highmem -c 10 -t 0-11:59 --mem=200G calc_pcoa.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/multi_map_30_collapsed_processed_v2.csv 0 10
+
 ```
+
+# Make PCoA plot 
+```{r}
+library(data.table)
+library(ggplot2)
+mydf = fread("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/multi_map_30_collapsed_processed_v2PCoA_mat0.csv",header=TRUE,data.table=FALSE,sep=",")
+metadata= read.csv("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/human_env_metadata_may_7_2021.csv")
+
+rownames(mydf) = mydf[,1]
+mydf = mydf[,-1]
+mydf$ecology = metadata[match(rownames(mydf),metadata$prokka_id),"ecology"]
+
+mydf$human_env_nonhumanhost = metadata[match(rownames(mydf),metadata$prokka_id),"human_env_nonhumanhost"]
+
+unique_ecologies = unique(mydf$ecology)
+color_pallete = pals::alphabet(n=length(unique_ecologies))
+names(color_pallete) = unique_ecologies
+
+#color_pallete[color_pallete=="vaginal"] = "#000000"
+#color_pallete[color_pallete=="skin"] = "#ecf542"
+
+# add data
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/PcoA_plot.pdf")
+ggplot(mydf,aes(x=V1,y=V2,color=ecology)) + geom_point() + scale_colour_manual(values=color_pallete)
+dev.off()
+# also facet wrap where facet by ecology so you can see low density ecologies. 
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/PcoA_plot_faceted.pdf")
+ggplot(mydf,aes(x=V1,y=V2,color=ecology)) + geom_point(aes()) + scale_colour_manual(values=color_pallete) + facet_wrap(~ human_env_nonhumanhost)
+dev.off()
+
+mydf$alpha_high_env = rep(0.1,nrow(mydf))
+mydf$alpha_high_env[mydf$human_env_nonhumanhost == "HUMAN"] = 0.01
+mydf$alpha_high_env[mydf$human_env_nonhumanhost == "NON-HUMAN-HOST"] = 0.01
+mydf$alpha_high_env[mydf$human_env_nonhumanhost == "ENV"] = 1
+
+mydf$alpha_high_human = rep(0.1,nrow(mydf))
+mydf$alpha_high_human[mydf$human_env_nonhumanhost == "HUMAN"] = 1
+mydf$alpha_high_human[mydf$human_env_nonhumanhost == "NON-HUMAN-HOST"] = 0.01
+mydf$alpha_high_human[mydf$human_env_nonhumanhost == "ENV"] = 0.01
+
+mydf$alpha_high_nonhumanhost = rep(0.1,nrow(mydf))
+mydf$alpha_high_nonhumanhost[mydf$human_env_nonhumanhost == "HUMAN"] = 0.01
+mydf$alpha_high_nonhumanhost[mydf$human_env_nonhumanhost == "NON-HUMAN-HOST"] = 1
+mydf$alpha_high_nonhumanhost[mydf$human_env_nonhumanhost == "ENV"] = 0.01
+
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/PcoA_plot_env.pdf",height=3.5)
+ggplot(mydf,aes(x=V1,y=V2,color=ecology,alpha=alpha_high_env)) + geom_point() + scale_colour_manual(values=color_pallete) + theme_classic()
+dev.off()
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/PcoA_plot_human.pdf",height = 3.5)
+ggplot(mydf,aes(x=V1,y=V2,color=ecology,alpha=alpha_high_human)) + geom_point() + scale_colour_manual(values=color_pallete) + theme_classic()
+dev.off()
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/PcoA_plot_nonhumanhost.pdf",height=3.5)
+ggplot(mydf,aes(x=V1,y=V2,color=ecology,alpha=alpha_high_nonhumanhost)) + geom_point() + scale_colour_manual(values=color_pallete) + theme_classic()
+dev.off()
+
+# change alpha (weight by density) * add variance explained
+#ggplot(mydf,aes(x=V1,y=V3,color=ecology)) + geom_point()
+#ggplot(mydf,aes(x=V2,y=V3,color=ecology)) + geom_point()
+
+# run UMAP on principle components
+
+library(umap)
+myumap_50PCs = umap(mydf[,1:50],n_components=2,random_state=42)
+myumap_50PCs_embeddings = myumap_50PCs$layout
+colnames(myumap_50PCs_embeddings) = c("UMAP1","UMAP2")
+myumap_50PCs_embeddings = as.data.frame(myumap_50PCs_embeddings)
+myumap_50PCs_embeddings$ecology = metadata[match(rownames(myumap_50PCs_embeddings),metadata$prokka_id),"ecology"]
+
+ggplot(myumap_50PCs_embeddings,aes(x=UMAP1,y=UMAP2,color=ecology)) + geom_point() + scale_colour_manual(values=color_pallete) 
+
+```
+
 
 
 ##Human clusters are cluster 7, 2 (gut clusters) 3 and 4 are oral+. Lets make subclusters of these guys

@@ -1,0 +1,42 @@
+---
+title: "plot_global_conserved_50_perc_gene_prev_with_gtdb_annotations"
+author: "Sam Zimmerman"
+date: "4/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/")
+```
+
+
+```{r}
+global_gene_prevalence_50perc = read.table("global_conserved_genes_prevalence_by_gene_50perc.txt",sep="\t",header=T)
+# load in gtdb-tk alignments
+aligned_bac120_df_50perc = read.table("../figure4_highly_conserved_genes/gtdbtk_analysis/gtdb_aligned_to_conserved_consensus_genes_50perc.txt",header=F,sep="\t")
+# get proportion of samples
+metadata = read.csv("../../human_env_metadata_march_22_2021.csv")
+sample_number = nrow(metadata)
+# now get fraction of samples conserved genes are in
+global_gene_prevalence_50perc$frac = global_gene_prevalence_50perc$prev/sample_number
+
+aligns_to_bac120 = global_gene_prevalence_50perc$V1%in%aligned_bac120_df_50perc$V1
+aligns_to_bac120 = as.numeric(aligns_to_bac120)
+
+global_gene_prevalence_50perc$alignsToBac = aligns_to_bac120
+# now order V1 by prevalence
+xaxis_order = global_gene_prevalence_50perc[order(global_gene_prevalence_50perc$prev,decreasing = T),"V1"]
+global_gene_prevalence_50perc$V1 = factor(global_gene_prevalence_50perc$V1,levels=xaxis_order)
+
+global_gene_prevalence_50perc$alignsToBac[global_gene_prevalence_50perc$alignsToBac==0] = "Not Present in GTDB bac120"
+global_gene_prevalence_50perc$alignsToBac[global_gene_prevalence_50perc$alignsToBac==1] = "Present in GTDB bac120"
+
+pdf("figures/global_conserved_genes_prevalence_50perc.pdf",width=6)
+ggplot(data=global_gene_prevalence_50perc,aes(x=V1, y=frac,fill=as.factor(alignsToBac)))+ scale_fill_manual(name="",values=c("red","black")) + geom_bar(stat="identity") + theme(axis.ticks.x = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) + labs(x = "genes",y="proportion of samples") + geom_hline(yintercept=median(global_gene_prevalence_50perc$frac),color = "green")+theme(axis.title.x=element_blank(),axis.text.x=element_blank(),axis.ticks.x=element_blank())
+dev.off()
+```
+

@@ -79,6 +79,8 @@ get_sig_genes = function(input_file,database,target_ecologies) {
   fdr_columns = pval_cols[, lapply(.SD, function(x) p.adjust(x,method="BY"))]
   colnames(fdr_columns) = gsub("pval_","fdr_",colnames(fdr_columns))
   all_genes_DF = cbind(myDT,fdr_columns)
+  
+  pval_fdr_cols = cbind(geneName=myDT$geneName,pval_cols,fdr_columns)
   ## get the significant genes in each category
   sig_genes_each_ecology=lapply(target_ecologies, function(myecology) {
   # first get all pvalue columns
@@ -104,6 +106,11 @@ if(database == "GUT_ENV_CONGENES_SEQS") {
 } else if(database == "AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS") {
   binary_mat = binary_mat[(binary_mat$glacier_permafrost == 1 | binary_mat$soil) & (binary_mat$aquatic_sediment == 1 | binary_mat$aquatic),]
 }
+  significant_bool = pval_fdr_cols$geneName%in%rownames(binary_mat)
+  pval_fdr_cols_sigOnly = pval_fdr_cols[significant_bool,]
+  fwrite(pval_fdr_cols_sigOnly,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/",database,"_sigGenes_pval_fdr_sigOnly.txt",sep=""),quote=FALSE,sep="\t",col.names=TRUE,row.names=FALSE)
+  pval_fdr_cols$is_significant = significant_bool
+  fwrite(pval_fdr_cols,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/",database,"_sigGenes_pval_fdr.txt",sep=""),quote=FALSE,sep="\t",col.names=TRUE,row.names=FALSE)
   binary_mat_with_gene_names = cbind(geneNames=rownames(binary_mat),binary_mat)
   write.table(binary_mat_with_gene_names,paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/",database,"_sigGenes_intersections_binary_mat.txt",sep=""),quote=F,sep="\t",col.names=T,row.names=F)
 return(binary_mat)

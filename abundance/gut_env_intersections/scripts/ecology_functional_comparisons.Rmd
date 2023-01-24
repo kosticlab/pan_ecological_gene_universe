@@ -14,6 +14,7 @@ library(tidyverse)
 library(ggplot2)
 library(RColorBrewer)
 library(cowplot)
+library(plyr)
 
 theme_set(theme_cowplot())
 
@@ -27,10 +28,17 @@ theme_set(theme_cowplot())
 
 setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
 
+COG_info = read.table("~/Dropbox (HMS)/Kostic_Lab/COG_files/fun-20.tab",sep="\t",header=F)
 
 ge = read.csv('GUT_ENV_CONGENES_SEQS_all_annotations.txt',header=T,sep='\t',quote="")
 hgnh = read.csv('HUMAN-GUT_NON-HUMAN-GUT_CONGENES_SEQS_V2_all_annotations.txt',header=T,sep='\t',quote="")
 e = read.csv('AQUATIC_TERRESTRIAL_CONGENES_V2_SEQS_all_annotations.txt',header=T,sep='\t',quote="")
+
+ge$EC_level1 = sapply(strsplit(ge$EC_description,split="[.]"), function(x) x[1])
+hgnh$EC_level1 = sapply(strsplit(hgnh$EC_description,split="[.]"), function(x) x[1])
+e$EC_level1 = sapply(strsplit(e$EC_description,split="[.]"), function(x) x[1])
+
+
 ge_sum = nrow(ge)
 hgnh_sum = nrow(hgnh)
 e_sum = nrow(e)
@@ -50,23 +58,130 @@ ggsave('total_counts.pdf',width = 8,height = 9)
 
 setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
 
+format_cog_cats = function(my_df) {
+  #apply(ge_sub_v2, 1, function(myrow) {
+  my_temp_list = alply(my_df, 1, function(myrow) {
+    myrow[,1] = as.character(myrow[,1])
+    myrow[,4] = as.character(myrow[,4])
+    myrow = as.character(myrow)
+    if(!is.na(myrow[4])) {
+      cats_split = strsplit(myrow[4],split="")[[1]]
+      cats_description = COG_info[match(cats_split,COG_info$V1),"V3"]
+      if(length(cats_description) == 1) {
+        div_frac = myrow[3]
+        return(c(myrow,cats_description,div_frac))
+      } else {
+        new_df = matrix(rep(myrow,each=length(cats_description)),nrow=length(cats_description))
+        new_df = as.data.frame(new_df)
+        new_df$cats_description = cats_description
+        new_df[,4] = cats_split
+        #new_df[,3] = as.numeric(new_df[,3])/ length(cats_description)
+        new_df$div_frac = as.numeric(new_df[,3])/ length(cats_description)
+        return(new_df)
+      }
+    } 
+    else {
+      cats_description = NA
+      div_frac = myrow[3]
+      return(c(myrow,cats_description,div_frac))
+    }
+  })
+  my_output_df = do.call("rbind",my_temp_list)
+  colnames(my_output_df) = c(".","Freq","frac_orig","COG_id","COG_cat","frac")
+  my_output_df$frac = as.numeric(my_output_df$frac)
+  my_output_df$Freq = as.numeric(my_output_df$Freq)
+  my_output_df$frac_orig = as.numeric(my_output_df$frac_orig)
+  return(my_output_df)
+}
+
 ge_sub = ge %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq))) 
+# map COG categories back to protein products
+ge_sub$COG_cat = ge[match(ge_sub[,1],ge$protein),"cog_cat_description"]
+ge_sub$EC_cat = ge[match(ge_sub[,1],ge$protein),"EC_level1"]
+
 #ge_sub$`.` = sapply(strsplit(as.character(ge_sub[,1]),split="\\."), function(x) x[length(x)])
 ge_sub$`.` = fct_reorder(ge_sub$`.`,ge_sub$frac)
 ggplot(data = ge_sub %>% head(25),aes(x = `.`, y = frac)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
-ggsave('ge_product.pdf')
+ggsave('ge_product.pdf',width=19,height=9)
+ge_sub_v2 = ge %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq))) 
+ge_sub_v2$COG_cat = ge[match(ge_sub_v2[,1],ge$protein),"COG_functional_category"]
+ge_sub_v2_df = format_cog_cats(ge_sub_v2)
+ge_sub_v2_df[,1] = factor(ge_sub_v2_df[,1],levels=ge_sub_v2[order(ge_sub_v2$frac,decreasing = F),1])
+ggplot(data = ge_sub_v2_df  %>% head(25),aes(x = `.`, y = frac,fill=COG_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq,y=frac_orig), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('ge_product_colored_v2.pdf',width=19,height=9)
 
-hgnh_sub = hgnh %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq))) 
+
+hgnh_sub = hgnh %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq)))
+hgnh_sub$COG_cat = hgnh[match(hgnh_sub[,1],hgnh$protein),"cog_cat_description"]
+hgnh_sub$EC_cat = hgnh[match(hgnh_sub[,1],hgnh$protein),"EC_level1"]
+
 #hgnh_sub$`.` = sapply(strsplit(as.character(hgnh_sub[,1]),split="\\."), function(x) x[length(x)])
 hgnh_sub$`.` = fct_reorder(hgnh_sub$`.`,hgnh_sub$frac)
 ggplot(data = hgnh_sub  %>% head(25),aes(x = `.`, y = frac)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
-ggsave('hnhg_product.pdf')
+ggsave('hnhg_product.pdf',width=19,height=9)
+hgnh_sub_v2 = hgnh %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq)))
+hgnh_sub_v2$COG_cat = hgnh[match(hgnh_sub_v2[,1],hgnh$protein),"COG_functional_category"]
+
+hgnh_sub_v2_df = format_cog_cats(hgnh_sub_v2)
+hgnh_sub_v2_df[,1] = factor(hgnh_sub_v2_df[,1],levels=hgnh_sub_v2[order(hgnh_sub_v2$frac,decreasing = F),1])
+ggplot(data = hgnh_sub_v2_df  %>% head(25),aes(x = `.`, y = frac,fill=COG_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq,y=frac_orig), fun = mean, geom = "text", size = 3,hjust = -1)
+ggsave('hnhg_product_colored_v2.pdf',width=19,height=9)
+
+
 
 e_sub = e %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq))%>% filter(`.` != '', `.` != 'hypothetical protein')%>% mutate(frac = Freq/(sum(Freq))) 
+e_sub$COG_cat = e[match(e_sub[,1],e$protein),"cog_cat_description"]
+e_sub$EC_cat = e[match(e_sub[,1],e$protein),"EC_level1"]
+
 #e_sub$`.` = sapply(strsplit(as.character(e_sub[,1]),split="\\."), function(x) x[length(x)])
 e_sub$`.` = fct_reorder(e_sub$`.`,e_sub$frac)
 ggplot(data = e_sub %>% head(25),aes(x = `.`, y = frac)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1)
-ggsave('e_product.pdf')
+ggsave('e_product.pdf',width=19,height=9)
+
+e_sub_v2 = e %>% select(protein) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(frac = Freq/(sum(Freq)))
+e_sub_v2$COG_cat = e[match(e_sub_v2[,1],e$protein),"COG_functional_category"]
+
+e_sub_v2_df = format_cog_cats(e_sub_v2)
+e_sub_v2_df[,1] = factor(e_sub_v2_df[,1],levels=e_sub_v2[order(e_sub_v2$frac,decreasing = F),1])
+#ggplot(data = e_sub_v2_df  %>% head(25),aes(x = `.`, y = frac,fill=COG_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq,y=frac_orig), fun = mean, geom = "text", size = 3,hjust = -1)
+#ggsave('e_product_colored_v2.pdf',width=19,height=9)
+
+
+top25_cog_each_cat = unique(unlist(c(e_sub_v2_df %>% head(25) %>% select(COG_cat), hgnh_sub_v2_df %>% head(25) %>% select(COG_cat), ge_sub_v2_df %>% head(25) %>% select(COG_cat))))
+
+top25_EC_each_cat = unique(unlist(c(e_sub %>% head(25) %>% select(EC_cat), hgnh_sub %>% head(25) %>% select(EC_cat), ge_sub %>% head(25) %>% select(EC_cat))))
+
+myEC_cols = c("#9966cc","#0000FF","#EAB563","#854c65","#000000","#228B22","#00FF00","#f0fff0")
+names(myEC_cols) = top25_EC_each_cat
+EC_colScale = scale_fill_manual(name = "EC_cat",values = myEC_cols)
+
+ggplot(data = e_sub %>% head(25),aes(x = `.`, y = frac,fill=EC_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) + EC_colScale
+ggsave('e_product_colored_EC.pdf',width=19,height=9)
+ggplot(data = hgnh_sub %>% head(25),aes(x = `.`, y = frac,fill=EC_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) + EC_colScale
+ggsave('hgnh_product_colored_EC.pdf',width=19,height=9)
+ggplot(data = ge_sub %>% head(25),aes(x = `.`, y = frac,fill=EC_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) + EC_colScale
+ggsave('ge_product_colored_EC.pdf',width=19,height=9)
+
+
+library(RColorBrewer)
+#myCols = colorRampPalette(c("yellow","blue", "red"))( 17)
+library(pals)
+my_pal_cols = pal.bands(alphabet,n=18)
+myCols = c("#9966cc","#0000FF","#EAB563","#854c65","#000000","#228B22","#00FF00","#f0fff0","#FF0000","#00A36C","#F0E68C","#BFFF00","#FF00FF","#000080","#FFA500","#FFC0CB","#998811","#87ceeb")
+
+names(myCols) = sort(c(top25_cog_each_cat,"Translation, ribosomal structure and biogenesis"),na.last = T)
+colScale <- scale_fill_manual(name = "COG_cat",values = myCols)
+
+e_sub_v2_df$COG_cat = as.factor(e_sub_v2_df$COG_cat)
+hgnh_sub_v2_df$COG_cat = as.factor(hgnh_sub_v2_df$COG_cat)
+ge_sub_v2_df$COG_cat = as.factor(ge_sub_v2_df$COG_cat)
+
+ggplot(data = e_sub_v2_df %>% filter(`.`%in%e_sub_v2[order(e_sub_v2$frac,decreasing = T),1][1:25]),aes(x = `.`, y = frac,fill=COG_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq,y=frac_orig), fun = mean, geom = "text", size = 3,hjust = -1) + colScale
+ggsave('e_product_colored_v2.pdf',width=19,height=9)
+ggplot(data = hgnh_sub_v2_df  %>% filter(`.`%in%hgnh_sub_v2[order(hgnh_sub_v2$frac,decreasing = T),1][1:25]),aes(x = `.`, y = frac,fill=COG_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq,y=frac_orig), fun = mean, geom = "text", size = 3,hjust = -1) + colScale
+ggsave('hgnh_product_colored_v2.pdf',width=19,height=9)
+ggplot(data = ge_sub_v2_df  %>% filter(`.`%in%ge_sub_v2[order(ge_sub_v2$frac,decreasing = T),1][1:25]),aes(x = `.`, y = frac,fill=COG_cat)) + geom_bar(stat='identity') + coord_flip() + stat_summary(aes(label = Freq,y=frac_orig), fun = mean, geom = "text", size = 3,hjust = -1) + colScale
+ggsave('ge_product_colored_v2.pdf',width=19,height=9)
 
 ```
 
@@ -157,6 +272,15 @@ ggsave('hyps.pdf',width = 8,height = 9)
 
 ```{r}
 #cog overview figure
+
+#cog_named_vec = c("Amino acid transport and metabolism","Carbohydrate transport and metabolism","Cell cycle control, cell division, chromosome partitioning","Cell wall/membrane/envelope biogenesis","Coenzyme transport and metabolism","Defense mechanisms","Energy production and conversion","Function unknown","General function prediction only","Inorganic ion transport and metabolism","Lipid transport and metabolism","Mobilome: prophages, transposons","Posttranslational modification, protein turnover, chaperones","Replication, recombination and repair","Signal transduction mechanisms","Transcription","Translation, ribosomal structure and biogenesis")
+
+#myCols = c("#9966cc","#0000FF","#EAB563","#854c65","#000000","#228B22","#00FF00","#f0fff0","#FF0000","#00A36C","#F0E68C","#BFFF00","#FF00FF","#000080","#FFA500","#FFC0CB","#998811")
+
+#names(myCols) = cog_named_vec
+#colScale <- scale_fill_manual(name = "COG_cat",values = myCols)
+
+
 setwd('~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/boxplots_and_upset/')
 
 ge_sub = ge %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(name = 'human gut and environment',frac = Freq/(sum(Freq))) %>% head(5)
@@ -170,12 +294,73 @@ e_sub$`.` = fct_reorder(e_sub$`.`,e_sub$frac)
 
 ggplot(data = ge_sub,aes(x = `.`, y = frac)) + geom_bar(fill = '#04C334',stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2) + coord_flip()
 ggsave('ge_cog_cats.pdf')
+#ggplot(data = ge_sub,aes(x = `.`, y = frac,fill=`.`)) + geom_bar(stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2) + coord_flip() + colScale
+#ggsave('ge_cog_cats_colored.pdf',width=18)
+
 
 ggplot(data = hgnh_sub,aes(x = `.`, y = frac)) + geom_bar(fill = '#00BFC4',stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1))+ ylim(0,.2)+ coord_flip()
 ggsave('hgng_cog_cats.pdf')
+#ggplot(data = hgnh_sub,aes(x = `.`, y = frac,fill=`.`)) + geom_bar(stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2) + coord_flip() + colScale
+#ggsave('hgnh_cog_cats_colored.pdf',width=18)
+
 
 ggplot(data = e_sub,aes(x = `.`, y = frac)) + geom_bar(fill = '#F8766D',stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1))+ ylim(0,.2)+ coord_flip()
 ggsave('e_cog_cats.pdf')
+#ggplot(data = e_sub,aes(x = `.`, y = frac,fill=`.`)) + geom_bar(stat='identity',position='dodge') + stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2) + coord_flip() + colScale
+#ggsave('e_cog_cats_colored.pdf',width=18)
+
+# merge together
+
+ge_sub_all = ge %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(name = 'human gut and environment',frac = Freq/(sum(Freq)))
+ge_sub_all$`.` = fct_reorder(ge_sub_all$`.`,ge_sub_all$frac)
+
+hgnh_sub_all = hgnh %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq)) %>% filter(`.` != '', `.` != 'hypothetical protein') %>% mutate(name = 'human gut and non-human-gut',frac = Freq/(sum(Freq)))
+hgnh_sub_all$`.` = fct_reorder(hgnh_sub_all$`.`,hgnh_sub_all$frac)
+
+e_sub_all = e %>% select(cog_cat_description) %>% table %>% as.data.frame %>% arrange(desc(Freq))%>% filter(`.` != '', `.` != 'hypothetical protein')%>% mutate(name = 'environment',frac = Freq/(sum(Freq)))
+e_sub_all$`.` = fct_reorder(e_sub_all$`.`,e_sub_all$frac)
+
+
+all_top5_cog_cats = unique(c(as.character(e_sub[,1]),as.character(hgnh_sub[,1]),as.character(ge_sub[,1])))
+
+e_hgnh_ge_sub_merged = rbind(e_sub_all,hgnh_sub_all,ge_sub_all)
+
+e_hgnh_ge_sub_merged_wide = merge(e_sub_all,hgnh_sub_all,by=".",all=TRUE)
+e_hgnh_ge_sub_merged_wide = merge(e_hgnh_ge_sub_merged_wide,ge_sub_all,by=".",all=TRUE)
+e_hgnh_ge_sub_merged_wide$Freq.x[is.na(e_hgnh_ge_sub_merged_wide$Freq.x)] = 0
+e_hgnh_ge_sub_merged_wide$name.x[is.na(e_hgnh_ge_sub_merged_wide$name.x)] = "environment"
+e_hgnh_ge_sub_merged_wide$frac.x[is.na(e_hgnh_ge_sub_merged_wide$frac.x)] = 0
+e_hgnh_ge_sub_merged_wide$Freq.y[is.na(e_hgnh_ge_sub_merged_wide$Freq.y)] = 0
+e_hgnh_ge_sub_merged_wide$name.y[is.na(e_hgnh_ge_sub_merged_wide$name.y)] = "human gut and non-human-gut"
+e_hgnh_ge_sub_merged_wide$frac.y[is.na(e_hgnh_ge_sub_merged_wide$frac.y)] = 0
+e_hgnh_ge_sub_merged_wide$Freq[is.na(e_hgnh_ge_sub_merged_wide$Freq)] = 0
+e_hgnh_ge_sub_merged_wide$name[is.na(e_hgnh_ge_sub_merged_wide$name)] = "human gut and environment"
+e_hgnh_ge_sub_merged_wide$frac[is.na(e_hgnh_ge_sub_merged_wide$frac)] = 0
+
+e_hgnh_ge_sub_merged_wide_top5 = e_hgnh_ge_sub_merged_wide[e_hgnh_ge_sub_merged_wide[,1]%in%all_top5_cog_cats,]
+
+hgnh_vs_env_FC = e_hgnh_ge_sub_merged_wide_top5$frac.y/e_hgnh_ge_sub_merged_wide_top5$frac.x
+
+e_hgnh_ge_sub_merged_wide_top5_ordered = e_hgnh_ge_sub_merged_wide_top5[order(hgnh_vs_env_FC),]
+
+e_hgnh_ge_sub_merged_top5 = e_hgnh_ge_sub_merged[e_hgnh_ge_sub_merged[,1]%in%all_top5_cog_cats,]
+
+e_hgnh_ge_sub_merged_top5[,1] = factor(e_hgnh_ge_sub_merged_top5[,1],levels=as.character(e_hgnh_ge_sub_merged_wide_top5_ordered[,1]))
+
+#e_hgnh_ge_sub_merged_top5[,1] = factor(e_hgnh_ge_sub_merged_top5[,1],levels = rev(c("Energy production and conversion","Lipid transport and metabolism","Signal transduction mechanisms","Inorganic ion transport and metabolism","Carbohydrate transport and metabolism","Translation, ribosomal structure and biogenesis","Replication, recombination and repair","Amino acid transport and metabolism","Cell wall/membrane/envelope biogenesis")))
+
+ggplot(data = e_hgnh_ge_sub_merged_top5,aes(x = `.`, y = frac,fill=name)) + geom_bar(stat='identity',position='dodge') + coord_flip() + theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2)
+
+ggsave('all_cog_cats_colored.pdf')
+ggsave('all_cog_cats_colored_small.jpg',units = 'in',width= 12.24,height = 9.79,device='jpeg')
+
+#jpeg(filename="all_cog_cats_colored_small.jpg",width= 12.24,height = 9.79,units="in",res=300)
+pdf("all_cog_cats_colored_small.pdf",width= 12.24,height = 9.79)
+ggplot(data = e_hgnh_ge_sub_merged_top5,aes(x = `.`, y = frac,fill=name)) + geom_bar(stat='identity',position='dodge') + coord_flip() + theme(axis.text.x = element_text(angle = 70,hjust = 1)) + ylim(0,.2) + theme(axis.text=element_text(size=20),legend.text=element_text(size=15))
+dev.off()
+#+ geom_text(aes(x=`.`,y=frac,label=Freq),position = position_dodge(width = 1),hjust=-0.1) + coord_flip()
+  
+  #stat_summary(aes(label = Freq), fun = mean, geom = "text", size = 3,hjust = -1) +  theme(axis.text.x = element_text(angle = 70,hjust = 1))+ ylim(0,.2)+ coord_flip()
 
 ```
 

@@ -667,3 +667,374 @@ all_taxa_enrichments_cluster7 = get_all_taxa_enrichments(taxa_annotations=taxa_d
 
 
 ```
+
+##Redo taxa enrichemnts
+
+```{r}
+
+clusters_mem_all_samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_cluster_mem.txt",sep="\t",header=T)
+sample_metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+
+clusters_mem_all_samples$ID = sample_metadata[match(clusters_mem_all_samples[,1],sample_metadata$prokka_id),"sample"]
+
+### make sure that we have gene annotation for the samples
+#clusters_mem_all_samples_in_gene_annotations = clusters_mem_all_samples[clusters_mem_all_samples$sample%in%consensus_seq_annotations$sample,]
+
+
+# get prokka ID for each sample
+
+filesA = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/CAT_output/",pattern=".ORF2LCA_named.txt",recursive = TRUE,full.names = TRUE)
+filesB = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/diamond_output/",pattern="_tax_names_annotated.txt",full.names = TRUE)
+all_annotation_files = c(filesA,filesB)
+sampleBasename = basename(all_annotation_files)
+sampleID = gsub("_prokka_out.ORF2LCA_named.txt","",sampleBasename)
+sampleID = gsub("_tax_names_annotated.txt","",sampleID)
+
+sampleID2 = sapply(sampleID, function(samp) {
+  if(samp%in%sample_metadata$prokka_id) {
+    samp = sample_metadata[match(samp,sample_metadata$prokka_id),"sample"]
+  } else {
+    return(samp)
+  }
+})
+
+all_annotation_files_df = data.frame(all_annotation_files,sampleID2)
+
+all_annotation_files_df = all_annotation_files_df[all_annotation_files_df$sampleID2%in%clusters_mem_all_samples$ID,]
+
+
+library(data.table)
+library(parallel)
+gene_numbers_each_sample = mclapply(all_annotation_files_df[,1], function(x)  {
+  annotation_df_temp = fread(x,sep="\t",header=TRUE,fill=TRUE)
+  annotation_df_temp$species = gsub("*","",annotation_df_temp$species,fixed=TRUE)
+  annotation_df_temp$superkingdom = gsub("*","",annotation_df_temp$superkingdom,fixed=TRUE)
+  annotation_df_temp$phylum = gsub("*","",annotation_df_temp$phylum,fixed=TRUE)
+  annotation_df_temp$class = gsub("*","",annotation_df_temp$class,fixed=TRUE)
+  annotation_df_temp$order = gsub("*","",annotation_df_temp$order,fixed=TRUE)
+  annotation_df_temp$family = gsub("*","",annotation_df_temp$family,fixed=TRUE)
+  annotation_df_temp$genus = gsub("*","",annotation_df_temp$genus,fixed=TRUE)
+  superkingdoms = unique(annotation_df_temp[superkingdom != "no support" & superkingdom != "" & !is.na(superkingdom),superkingdom])
+  phylums = unique(annotation_df_temp[phylum != "no support" & phylum != "" & !is.na(phylum),phylum])
+  classes = unique(annotation_df_temp[class != "no support" & class != "" & !is.na(class),paste(class,phylum,sep="_")])
+  orders = unique(annotation_df_temp[order != "no support" & order != "" & !is.na(order),paste(order,phylum,sep="_")])
+  families = unique(annotation_df_temp[family != "no support" & family != "" & !is.na(family),paste(family,phylum,sep="_")])
+  genuses = unique(annotation_df_temp[genus != "no support" & genus != "" & !is.na(genus),paste(genus,phylum,sep="_")])
+  speciess = unique(annotation_df_temp[species != "no support" & species != "" & !is.na(species),paste(species,phylum,sep="_")])
+
+  return(list(superkingdoms,phylums,classes,orders,families,genuses,speciess))
+},mc.cores=5)
+names(gene_numbers_each_sample) = all_annotation_files_df[,2]
+saveRDS(gene_numbers_each_sample,file="number_taxa_each_sample.rds")
+
+clusters_mem_all_samples_split = split(clusters_mem_all_samples,clusters_mem_all_samples$cluster)
+
+pvals_each_cluster_each_rank = lapply(clusters_mem_all_samples_split, function(clustdf) {
+  # first get the samples in clustdf
+  taxa_samples_in_cluster = gene_numbers_each_sample[clustdf$ID]
+  taxa_samples_in_not_cluster = gene_numbers_each_sample[setdiff(names(gene_numbers_each_sample),clustdf$ID)]
+  
+  taxa_order = c("superkingdom","phylum","class","order","family","genus","species")
+  pvals_each_rank = lapply(1:length(taxa_order), function(rank_num) {
+      rank = taxa_order[rank_num]
+      
+      cur_rank_list = lapply(taxa_samples_in_cluster, function(x) x[[rank_num]])
+      num_samples_in_cluster_with_taxa = table(unlist(cur_rank_list))
+      
+      num_samples_in_cluster_with_taxa_df = as.data.frame(num_samples_in_cluster_with_taxa)
+      colnames(num_samples_in_cluster_with_taxa_df)[2] = c("num_samples_in_cluster_with_taxa")
+      num_samples_in_cluster_without_taxa = length(cur_rank_list) - num_samples_in_cluster_with_taxa
+      num_samples_in_cluster_without_taxa_df = as.data.frame(num_samples_in_cluster_without_taxa)
+      colnames(num_samples_in_cluster_without_taxa_df)[2] = c("num_samples_in_cluster_without_taxa")
+
+      cluster_df = merge(num_samples_in_cluster_with_taxa_df,num_samples_in_cluster_without_taxa_df)
+      
+      # now do same thing for taxa not in cluster
+      taxa_of_rank_in_each_sample_other_clusters = lapply(taxa_samples_in_not_cluster, function(x) x[[rank_num]])
+
+      num_samples_in_other_clusters_with_taxa = table(unlist(taxa_of_rank_in_each_sample_other_clusters))
+      num_samples_in_other_clusters_with_taxa_df = as.data.frame(num_samples_in_other_clusters_with_taxa)
+      colnames(num_samples_in_other_clusters_with_taxa_df)[2] = "num_samples_not_in_cluster_with_taxa"
+      num_samples_in_other_clusters_without_taxa = length(taxa_samples_in_not_cluster) - num_samples_in_other_clusters_with_taxa
+      num_samples_in_other_clusters_without_taxa_df = data.frame(num_samples_in_other_clusters_without_taxa)
+      colnames(num_samples_in_other_clusters_without_taxa_df)[2] = "num_samples_not_in_cluster_without_taxa"
+      not_cluster_df = merge(num_samples_in_other_clusters_with_taxa_df,num_samples_in_other_clusters_without_taxa_df)
+      
+      all_cluster_df = merge(cluster_df,not_cluster_df,by="Var1",all.x=TRUE)
+      all_cluster_df$num_samples_not_in_cluster_with_taxa[is.na(all_cluster_df$num_samples_not_in_cluster_with_taxa)] = 0
+      all_cluster_df$num_samples_not_in_cluster_without_taxa[is.na(all_cluster_df$num_samples_not_in_cluster_without_taxa)] = 0
+      
+      # do fisher test for each taxa rank
+      rownames(all_cluster_df) = all_cluster_df[,1]
+      all_cluster_df = all_cluster_df[,-1]
+      pvals_df = apply(all_cluster_df,1, function(myrow) {
+        present_temp = c(myrow["num_samples_in_cluster_with_taxa"],myrow["num_samples_not_in_cluster_with_taxa"])
+        absent_temp = c(myrow["num_samples_in_cluster_without_taxa"],myrow["num_samples_not_in_cluster_without_taxa"])
+        df_temp = data.frame(present_temp,absent_temp)
+        rownames(df_temp) = c("in_cluster","in_other_clusters")
+        pval = fisher.test(df_temp,alternative="greater")$p.value
+        odds_group = myrow["num_samples_in_cluster_with_taxa"]/myrow["num_samples_in_cluster_without_taxa"]
+        odds_not_group = myrow["num_samples_not_in_cluster_with_taxa"]/myrow["num_samples_not_in_cluster_without_taxa"]
+        odds_ratio = odds_group/odds_not_group
+    CI = 1.96 * (sqrt(((1/myrow["num_samples_in_cluster_without_taxa"])+(1/myrow["num_samples_not_in_cluster_without_taxa"])+(1/myrow["num_samples_not_in_cluster_with_taxa"])+(1/myrow["num_samples_in_cluster_with_taxa"]))))
+    upper95_CI = exp((log(odds_ratio) + CI))
+    lower95_CI = exp((log(odds_ratio) - CI))
+        return(c(pval=pval,odds_ratio=odds_ratio,CI=CI,upper95_CI=upper95_CI,lower95_CI=lower95_CI))
+      })
+      rownames(pvals_df) = sapply(strsplit(rownames(pvals_df),split="[.]"),function(y) y[1])
+      pvals_df = t(pvals_df)
+      pvals_df = as.data.frame(pvals_df)
+      pvals_df$pval_orig = pvals_df$pval
+      pvals_df$pval = p.adjust(pvals_df$pval,method="BY")
+      if(rank_num>2) {
+        taxonomies_split = strsplit(rownames(pvals_df),split="_")
+        pvals_df$taxa = sapply(taxonomies_split, function(x) paste(x[-length(x)],collapse="_"))
+        pvals_df$phylum = sapply(taxonomies_split, function(x) x[length(x)])
+      } else {
+        pvals_df$taxa = rownames(pvals_df)
+      }
+      return(pvals_df)
+  })
+  return(pvals_each_rank)
+})
+
+saveRDS(pvals_each_cluster_each_rank,"pvals_each_cluster_each_rank_onesided.rds")
+taxa_order = c("superkingdom","phylum","class","order","family","genus","species")
+# divide enrichemnts by rank
+
+pvals_each_cluster_each_superkingdom = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[1]])
+pvals_each_cluster_each_phylum = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[2]])
+pvals_each_cluster_each_class = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[3]])
+pvals_each_cluster_each_order = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[4]])
+pvals_each_cluster_each_family = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[5]])
+pvals_each_cluster_each_genus = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[6]])
+pvals_each_cluster_each_species = lapply(pvals_each_cluster_each_rank, function(mylist) mylist[[7]])
+
+
+
+```
+
+#Try new strategy. Count the number of genes annotated to taxa in each sample. Then we will use a t test for enrichment instead of fisher's exact
+
+```{r}
+clusters_mem_all_samples = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/clustering/umap_dbscan_silhouette_output_50PCs_2components_minclust50_colScaled_cluster_mem.txt",sep="\t",header=T)
+sample_metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+
+clusters_mem_all_samples$ID = sample_metadata[match(clusters_mem_all_samples[,1],sample_metadata$prokka_id),"sample"]
+
+### make sure that we have gene annotation for the samples
+#clusters_mem_all_samples_in_gene_annotations = clusters_mem_all_samples[clusters_mem_all_samples$sample%in%consensus_seq_annotations$sample,]
+
+
+# get prokka ID for each sample
+
+filesA = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/CAT_output/",pattern=".ORF2LCA_named.txt",recursive = TRUE,full.names = TRUE)
+filesB = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/diamond_output/",pattern="_tax_names_annotated.txt",full.names = TRUE)
+all_annotation_files = c(filesA,filesB)
+sampleBasename = basename(all_annotation_files)
+sampleID = gsub("_prokka_out.ORF2LCA_named.txt","",sampleBasename)
+sampleID = gsub("_tax_names_annotated.txt","",sampleID)
+
+sampleID2 = sapply(sampleID, function(samp) {
+  if(samp%in%sample_metadata$prokka_id) {
+    samp = sample_metadata[match(samp,sample_metadata$prokka_id),"sample"]
+  } else {
+    return(samp)
+  }
+})
+
+all_annotation_files_df = data.frame(all_annotation_files,sampleID2)
+
+all_annotation_files_df = all_annotation_files_df[all_annotation_files_df$sampleID2%in%clusters_mem_all_samples$ID,]
+
+
+library(data.table)
+library(parallel)
+gene_numbers_each_sample = mclapply(all_annotation_files_df[,1], function(x)  {
+  sampleName_temp = all_annotation_files_df[match(x,all_annotation_files_df[,1]),2]
+  clusterNum = clusters_mem_all_samples[match(sampleName_temp,clusters_mem_all_samples[,3]),2]
+  annotation_df_temp = fread(x,sep="\t",header=TRUE,fill=TRUE)
+  num_ORFs_in_sample = nrow(annotation_df_temp)
+  annotation_df_temp$species = gsub("*","",annotation_df_temp$species,fixed=TRUE)
+  annotation_df_temp$superkingdom = gsub("*","",annotation_df_temp$superkingdom,fixed=TRUE)
+  annotation_df_temp$phylum = gsub("*","",annotation_df_temp$phylum,fixed=TRUE)
+  annotation_df_temp$class = gsub("*","",annotation_df_temp$class,fixed=TRUE)
+  annotation_df_temp$order = gsub("*","",annotation_df_temp$order,fixed=TRUE)
+  annotation_df_temp$family = gsub("*","",annotation_df_temp$family,fixed=TRUE)
+  annotation_df_temp$genus = gsub("*","",annotation_df_temp$genus,fixed=TRUE)
+  superkingdoms = table(annotation_df_temp[superkingdom != "no support" & superkingdom != "" & !is.na(superkingdom),superkingdom])
+  superkingdoms = as.data.frame(superkingdoms)
+  phylums = table(annotation_df_temp[phylum != "no support" & phylum != "" & !is.na(phylum),phylum])
+  phylums = as.data.frame(phylums)
+  classes = table(annotation_df_temp[class != "no support" & class != "" & !is.na(class),paste(class,phylum,sep="_")])
+  classes = as.data.frame(classes)
+  orders = table(annotation_df_temp[order != "no support" & order != "" & !is.na(order),paste(order,phylum,sep="_")])
+  orders = as.data.frame(orders)
+  families = table(annotation_df_temp[family != "no support" & family != "" & !is.na(family),paste(family,phylum,sep="_")])
+  families = as.data.frame(families)
+  genuses = table(annotation_df_temp[genus != "no support" & genus != "" & !is.na(genus),paste(genus,phylum,sep="_")])
+  genuses = as.data.frame(genuses)
+  speciess = table(annotation_df_temp[species != "no support" & species != "" & !is.na(species),paste(species,phylum,sep="_")])
+  speciess = as.data.frame(speciess)
+  if(nrow(speciess) > 0) {
+    speciess$sampleName_temp = x
+    speciess$cluster = clusterNum
+    speciess$Prop = speciess$Freq/num_ORFs_in_sample
+  } else {
+    speciess= NULL
+  }
+  if(nrow(genuses)>0) {
+    genuses$sampleName_temp = x
+    genuses$cluster = clusterNum
+    genuses$Prop = genuses$Freq/num_ORFs_in_sample
+  } else {
+    genuses = NULL
+  }
+  if(nrow(families)>0) {
+    families$sampleName_temp = x
+    families$cluster = clusterNum
+    families$Prop = families$Freq/num_ORFs_in_sample
+  } else {
+    families = NULL
+  }
+  if(nrow(orders) >0) {
+    orders$sampleName_temp = x
+    orders$cluster = clusterNum
+    orders$Prop = orders$Freq/num_ORFs_in_sample
+  } else {
+    orders = NULL
+  }
+  if(nrow(classes)>0) {
+    classes$sampleName_temp = x
+    classes$cluster = clusterNum
+    classes$Prop = classes$Freq/num_ORFs_in_sample
+  } else {
+    classes = NULL
+  }
+  if(nrow(phylums) > 0) {
+    phylums$sampleName_temp = x
+    phylums$cluster = clusterNum
+    phylums$Prop = phylums$Freq/num_ORFs_in_sample
+  } else {
+    phylums = NULL
+  }
+  if(nrow(superkingdoms) >0) {
+    superkingdoms$sampleName_temp = x
+    superkingdoms$cluster = clusterNum
+    superkingdoms$Prop = superkingdoms$Freq/num_ORFs_in_sample
+  } else {
+    superkingdoms = NULL
+  }
+  return(list(superkingdoms,phylums,classes,orders,families,genuses,speciess))
+},mc.cores=5)
+names(gene_numbers_each_sample) = all_annotation_files_df[,2]
+saveRDS(gene_numbers_each_sample,file="number_taxa_each_sample_counts_v2.rds")
+
+number_superkingdoms_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[1]])
+number_phylums_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[2]])
+number_classes_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[3]])
+number_orders_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[4]])
+number_families_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[5]])
+number_genus_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[6]])
+number_species_each_sample_list = lapply(gene_numbers_each_sample, function(y) y[[7]])
+# remove nulls
+
+superkingdom_null_samples = names(which(sapply(number_superkingdoms_each_sample_list,function(x) class(x)=="NULL")))
+phylum_null_samples = names(which(sapply(number_phylums_each_sample_list,function(x) class(x)=="NULL")))
+class_null_samples = names(which(sapply(number_classes_each_sample_list,function(x) class(x)=="NULL")))
+order_null_samples = names(which(sapply(number_orders_each_sample_list,function(x) class(x)=="NULL")))
+family_null_samples = names(which(sapply(number_families_each_sample_list,function(x) class(x)=="NULL")))
+genus_null_samples = names(which(sapply(number_genus_each_sample_list,function(x) class(x)=="NULL")))
+species_null_samples = names(which(sapply(number_species_each_sample_list,function(x) class(x)=="NULL")))
+all_null_samples = list(superkingdom_null_samples,phylum_null_samples,class_null_samples,order_null_samples,family_null_samples,genus_null_samples,species_null_samples)
+names(all_null_samples) = c("supkerkingdom","phylum","class","order","family","genus","species")
+# it looks like 2 samples have no taxa annotations. so lets remove those samples when we do t tests
+
+number_superkingdoms_each_sample_list = number_superkingdoms_each_sample_list[sapply(number_superkingdoms_each_sample_list,function(x) class(x)=="data.frame")]
+number_phylums_each_sample_list = number_phylums_each_sample_list[sapply(number_phylums_each_sample_list,function(x) class(x)=="data.frame")]
+number_classes_each_sample_list = number_classes_each_sample_list[sapply(number_classes_each_sample_list,function(x) class(x)=="data.frame")]
+number_orders_each_sample_list = number_orders_each_sample_list[sapply(number_orders_each_sample_list,function(x) class(x)=="data.frame")]
+number_families_each_sample_list = number_families_each_sample_list[sapply(number_families_each_sample_list,function(x) class(x)=="data.frame")]
+number_genus_each_sample_list = number_genus_each_sample_list[sapply(number_genus_each_sample_list,function(x) class(x)=="data.frame")]
+number_species_each_sample_list = number_species_each_sample_list[sapply(number_species_each_sample_list,function(x) class(x)=="data.frame")]
+
+number_superkingdoms_each_sample_df = rbindlist(number_superkingdoms_each_sample_list)
+number_phylums_each_sample_df = rbindlist(number_phylums_each_sample_list)
+number_classes_each_sample_df = rbindlist(number_classes_each_sample_list)
+number_orders_each_sample_df = rbindlist(number_orders_each_sample_list)
+number_families_each_sample_df = rbindlist(number_families_each_sample_list)
+number_genus_each_sample_df = rbindlist(number_genus_each_sample_list)
+number_species_each_sample_df = rbindlist(number_species_each_sample_list)
+
+# also find out the number of samples in each cluster
+# first remove samples where no taxa were found.
+
+num_samples_in_each_cluster = table(clusters_mem_all_samples[,2])
+# remove 2 because we know 2 samples had no taxonomic annotations
+num_samples_in_each_cluster = num_samples_in_each_cluster-2
+get_enrichments_for_taxa_level = function(taxa_count_df) {
+  cluster_list = list()
+  for(cluster_num in c(1,2,3,4,5,6,7)) {
+    num_samples_not_in_cluster_choice = sum(num_samples_in_each_cluster[-match(cluster_num,names(num_samples_in_each_cluster))])
+    num_samples_in_cluster_choice = num_samples_in_each_cluster[as.character(cluster_num)]
+    
+    all_taxa_counts_in_cluster = taxa_count_df[cluster==cluster_num]
+    all_taxa_counts_not_in_cluster = taxa_count_df[cluster!=cluster_num]
+    all_taxa_in_cluster = as.character(unique(all_taxa_counts_in_cluster$Var1))
+    # for each taxa in the cluster see if is enriched 
+    ttest_results_mat = matrix(0,nrow=length(all_taxa_in_cluster),ncol=3)
+    for(taxa_counter in 1:length(all_taxa_in_cluster)) {
+      taxa_temp = all_taxa_in_cluster[taxa_counter]
+      all_taxa_counts_in_cluster_proportions = all_taxa_counts_in_cluster[Var1 == taxa_temp]$Prop
+      all_taxa_counts_in__other_cluster_proportions = all_taxa_counts_not_in_cluster[Var1 == taxa_temp]$Prop
+      # if the taxa is never found in a sample, then the number is 0. so lets add the right number of 0s
+      num_0s_to_add_not_cluster = num_samples_not_in_cluster_choice - length(all_taxa_counts_in__other_cluster_proportions)
+      num_0s_to_add_cluster = num_samples_in_cluster_choice - length(all_taxa_counts_in_cluster_proportions)
+      if(num_0s_to_add_not_cluster>0) {
+        zeros_to_add_not_cluster = rep(0,num_0s_to_add_not_cluster)
+        all_taxa_counts_in__other_cluster_proportions = c(all_taxa_counts_in__other_cluster_proportions,zeros_to_add_not_cluster)
+      }
+      if(num_0s_to_add_cluster > 0) {
+        zeros_to_add_cluster = rep(0,num_0s_to_add_cluster)
+        all_taxa_counts_in_cluster_proportions = c(all_taxa_counts_in_cluster_proportions,zeros_to_add_cluster)
+      }  
+      
+      t_test_res = t.test(all_taxa_counts_in_cluster_proportions,all_taxa_counts_in__other_cluster_proportions,alternative="greater")
+      fold_change = mean(all_taxa_counts_in_cluster_proportions)/mean(all_taxa_counts_in__other_cluster_proportions)
+      pval = t_test_res$p.value 
+      t_statistic = t_test_res$statistic
+      t_test_res = c(pval,t_statistic,fold_change)
+      names(t_test_res) = c("pvalue","t","fold_change")
+      ttest_results_mat[taxa_counter,] = t_test_res
+    }
+    colnames(ttest_results_mat) = c("pvalue","t","fold_change")
+    BY_corrected_pval = p.adjust(ttest_results_mat[,1],method="BY")
+    ttest_results_mat = cbind(ttest_results_mat,BY=BY_corrected_pval)
+    rownames(ttest_results_mat) = all_taxa_in_cluster
+    cluster_list[[cluster_num]] = ttest_results_mat
+  }
+  return(cluster_list)
+}
+
+ttest_res_superkingdom = get_enrichments_for_taxa_level(number_superkingdoms_each_sample_df)
+ttest_res_phylum = get_enrichments_for_taxa_level(number_phylums_each_sample_df)
+ttest_res_class = get_enrichments_for_taxa_level(number_classes_each_sample_df)
+ttest_res_order = get_enrichments_for_taxa_level(number_orders_each_sample_df)
+ttest_res_family = get_enrichments_for_taxa_level(number_families_each_sample_df)
+ttest_res_genus = get_enrichments_for_taxa_level(number_genus_each_sample_df)
+ttest_res_species = get_enrichments_for_taxa_level(number_species_each_sample_df)
+
+saveRDS(ttest_res_superkingdom,"ttest_res_superkingdom.rds")
+saveRDS(ttest_res_phylum,"ttest_res_phylum.rds")
+saveRDS(ttest_res_class,"ttest_res_class.rds")
+saveRDS(ttest_res_order,"ttest_res_order.rds")
+saveRDS(ttest_res_family,"ttest_res_family.rds")
+saveRDS(ttest_res_genus,"ttest_res_genus.rds")
+saveRDS(ttest_res_species,"ttest_res_species.rds")
+
+```
+
+```{bash}
+sbatch -c 1 -t 0-04:00 -p short --mem=8G get_taxa_ttest_enrichment_raw_genes.bash
+```
+

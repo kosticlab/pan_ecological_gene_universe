@@ -1,0 +1,54 @@
+---
+title: "get_samples_per_UMAP_cluster"
+author: "Sam Zimmerman"
+date: "8/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/clustering/")
+```
+
+
+
+```{r}
+
+#get metadata so I can say percentage of samples in UMAP cluster
+metadata = read.csv("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/human_env_metadata_may_7_2021.csv")
+# get percentage of human microbiome samples in clusters 7, 4, 3, and 2
+metadata_human_microbiome = metadata[metadata$human_env_nonhumanhost == "HUMAN",]
+human_microbiome_cluster_membership = table(metadata_human_microbiome$UMAP_cluster)
+sum(human_microbiome_cluster_membership[c("7","4","3","2")]) / sum(human_microbiome_cluster_membership)
+
+# get percentage of environmental samples in clusters 1, 5, 6
+metadata_env_microbiome = metadata[metadata$human_env_nonhumanhost == "ENV",]
+env_microbiome_cluster_membership = table(metadata_env_microbiome$UMAP_cluster)
+sum(env_microbiome_cluster_membership[c("1","5","6")]) / sum(env_microbiome_cluster_membership)
+
+# get percent of env samples in microbiome
+metadata_env_microbiome_dt = data.table(metadata_env_microbiome)
+env_samples_in_human_clusters = metadata_env_microbiome_dt[UMAP_cluster=="7" | UMAP_cluster == "4" | UMAP_cluster == "3" | UMAP_cluster == "2", length(unique(prokka_id)),by=.(ecology)]
+
+env_samples_in_human_clusters[ecology=="aquatic",V1] / metadata_env_microbiome_dt[ecology=="aquatic",.N]
+env_samples_in_human_clusters[ecology=="aquatic-sediment",V1] / metadata_env_microbiome_dt[ecology=="aquatic-sediment",.N]
+env_samples_in_human_clusters[ecology=="terrestrial-soil",V1] / metadata_env_microbiome_dt[ecology=="terrestrial-soil",.N]
+env_samples_in_human_clusters[ecology=="glacier-or-permafrost",V1] / metadata_env_microbiome_dt[ecology=="glacier-or-permafrost",.N]
+
+# get percent of non-human host samples in UMAP clusters
+metadata_nhh_microbiome = metadata[metadata$human_env_nonhumanhost == "NON-HUMAN-HOST",]
+nhh_microbiome_cluster_membership = table(metadata_nhh_microbiome$UMAP_cluster)
+sum(nhh_microbiome_cluster_membership[c("7","4")]) / sum(nhh_microbiome_cluster_membership)
+
+
+# calc average number of genes in samples in each cluster
+metadata_dt = as.data.table(metadata)
+metadata_dt[,mean(clustered_30perc_gene_number),by=UMAP_cluster]
+
+mean_gene_num_per_cluster = metadata_dt[,mean(clustered_30perc_gene_number),by=UMAP_cluster]
+barplot(mean_gene_num_per_cluster)
+```
+
