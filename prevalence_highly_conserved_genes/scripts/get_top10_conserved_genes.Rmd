@@ -1,0 +1,35 @@
+---
+title: "get_top10_conserved_genes"
+author: "Sam Zimmerman"
+date: "2022-10-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+conserved_genes = read.table("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figure4_highly_conserved_genes/global_conserved_genes_prevalence_GTDB_annotated.txt",sep="\t",header=TRUE,quote="")
+
+conserved_genes_ordered = conserved_genes[order(conserved_genes$proportion_of_total_samples,decreasing = TRUE),]
+conserved_genes_ordered_top10 = conserved_genes_ordered[1:10,]
+conserved_genes_ordered_top10$prokka_protein_name = factor(conserved_genes_ordered_top10$prokka_protein_name,levels=conserved_genes_ordered_top10$prokka_protein_name)
+
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/figure4_highly_conserved_genes/top_ten_conserved_gens.pdf",width=10)
+ggplot(conserved_genes_ordered_top10) + geom_bar(aes(x=prokka_protein_name, y=proportion_of_total_samples,fill=COG_cat), stat="identity") + coord_flip(ylim = c(0.96, 1)) + theme_classic() + ylab("Proportion of total samples") + xlab("Protein") + scale_fill_discrete(name = "COG category")
+dev.off()
+
+# plot percent of samples each gene is in
+conserved_genes$V2 = factor(conserved_genes$V2,levels=conserved_genes$V2)
+conserved_genes$isGTDBgene = !is.na(conserved_genes$GTDBgene)
+
+conserved_genes$isGTDBgene[conserved_genes$isGTDBgene == TRUE] = "Not Present in GTDB bac120"
+conserved_genes$isGTDBgene[conserved_genes$isGTDBgene == FALSE] = "Present in GTDB bac120"
+
+median_prevalence = median(conserved_genes$proportion_of_total_samples)
+pdf("/Users/samuelzimmerman/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/prevalence/figures/prevalence_conserved_genes_revised_colors.pdf")
+ggplot(conserved_genes,aes(x=V2,y=proportion_of_total_samples,fill=isGTDBgene)) + geom_bar(stat="identity") + theme_classic() + theme(axis.text.x=element_blank(),axis.ticks.x=element_blank()) + scale_fill_manual(name="",values=c("red","black")) + xlab("Genes, sorted by prevalence") + geom_hline(yintercept=median_prevalence,color="green") + ylab("Proportion of Samples")
+dev.off()
+```
+

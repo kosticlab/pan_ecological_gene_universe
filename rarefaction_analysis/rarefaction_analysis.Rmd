@@ -1,0 +1,374 @@
+---
+title: "rarefaction_analysis"
+author: "Sam Zimmerman"
+date: "2022-09-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#First lets get the number of reads for each ID in our abunance metadata
+
+```{bash}
+cd ~/Dropbox\ \(HMS\)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/rarefaction_analysis
+
+# this is soooo slowwww
+awk -F '\t' '{print $9}' ~/Dropbox\ \(HMS\)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/abundance/metadata_abundance_samples_actually_used.txt | grep -v "ERR_ID" | while read line; do efetch -id $line -db sra -format runinfo -mode xml | xtract -pattern Row -def "NA" -element Sample Run spots; done > abundance_reads_per_sample.txt
+```
+
+
+
+
+#For each ecology get the samples with the highest number of reads
+
+```{r}
+
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/rarefaction_analysis/")
+library(data.table)
+library(dplyr)
+# get top 3. not top 5... I know my variable names are wrong...
+catalog_metada = read.csv("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/human_env_metadata_may_7_2021.csv")
+catalog_metada_human = catalog_metada[catalog_metada$human_env_nonhumanhost == "HUMAN",]
+# remove FerrettiP_2018 cause I don't have Runs for it
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$study_id == "FerrettiP_2018"),]
+# also remove CM_cf CM_madagascar and CM_periimplantitis for same reasons
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$study_id == "CM_cf"),]
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$study_id == "CM_madagascar"),]
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$study_id == "CM_periimplantitis"),]
+# remove sample HMP_2012__SRS078182 cause it has single end reads only. I'd rather avoid that
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$sample == "HMP_2012__SRS078182"),]
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$sample == "Castro-NallarE_2015__ES_069"),]
+catalog_metada_human = catalog_metada_human[-which(catalog_metada_human$sample == "SRS076951"),]
+
+catalog_metada_human_top5 = catalog_metada_human %>% group_by(ecology) %>% top_n(3,wt=Total.Read.Count)
+catalog_metada_human_top5 = catalog_metada_human_top5[order(catalog_metada_human_top5$ecology,catalog_metada_human_top5$Total.Read.Count),]
+catalog_metada_human_top5 = as.data.frame(catalog_metada_human_top5)
+# remove nasal cause we don't have enough reads 
+catalog_metada_human_top5 = catalog_metada_human_top5[catalog_metada_human_top5$ecology != "nasal",]
+catalog_metada_human_top5_eco_readNum = catalog_metada_human_top5[,c("sample","ecology","Total.Read.Count")]
+# add my own custom nasal samples I found earlier
+nasal_samples = data.frame(sample=c("ERR1816598","ERR1821991","ERR1816599"),ecology=c("nasal","nasal","nasal"),Total.Read.Count=c(47069262,42990982,42712756))
+catalog_metada_human_top5_eco_readNum = rbind(catalog_metada_human_top5_eco_readNum,nasal_samples)
+# also add custom airway samples 
+airway_samples = data.frame(sample=c("SRR5109960","SRR5109961","SRR5110005"),ecology=c("airways","airways","airways"),Total.Read.Count=c(54065478,63314105,55630149))
+catalog_metada_human_top5_eco_readNum = rbind(catalog_metada_human_top5_eco_readNum,airway_samples)
+# add run
+segata_runs = read.table("~/Downloads/NCBIaccession.txt",sep="\t",header=TRUE)
+segata_runs = segata_runs[match(catalog_metada_human_top5_eco_readNum$sample,segata_runs[,1]),]
+catalog_metada_human_top5_eco_readNum = cbind(catalog_metada_human_top5_eco_readNum,Run=segata_runs[,2])
+# for the ones that are NA, the sample name is the same as the run name
+catalog_metada_human_top5_eco_readNum$Run[which(is.na(catalog_metada_human_top5_eco_readNum[,4]))] = catalog_metada_human_top5_eco_readNum[which(is.na(catalog_metada_human_top5_eco_readNum[,4])),1]
+# remove the single end SRRs in the vaginal sample cause I don't know how to downsample paired and single end reads together. I think we should still have enough data
+catalog_metada_human_top5_eco_readNum[11,4] = gsub(";SRR059321;SRR059320","",catalog_metada_human_top5_eco_readNum[11,4])
+
+# read data that has read number of environment samples
+env_samples = read.table("abundance_reads_per_sample.txt")
+abundance_meatdata = read.table("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/abundance/metadata_abundance_samples_actually_used.txt",header=TRUE,sep="\t")
+abundance_meatdata = abundance_meatdata[match(env_samples[,2],abundance_meatdata$ERR_ID),]
+abundance_meatdata$readNumber = env_samples[,3]
+
+# create final categories
+abundance_meatdata$new_cats = rep("",nrow(abundance_meatdata))
+abundance_meatdata$new_cats[abundance_meatdata$host == "human" & abundance_meatdata$biome == "sputum"] = "airway"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "aquatic"] = "aquatic"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "aquatic_sediment"] = "aquatic_sediment"
+abundance_meatdata$new_cats[abundance_meatdata$host == "chicken"] = "chicken"
+abundance_meatdata$new_cats[abundance_meatdata$host == "coral"] = "coral"
+abundance_meatdata$new_cats[abundance_meatdata$host == "cow"] = "cow"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "permafrost"] = "permafrost/glacier"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "glacier"] = "permafrost/glacier"
+abundance_meatdata$new_cats[abundance_meatdata$host == "human" & abundance_meatdata$biome == "gut"] = "gut"
+abundance_meatdata$new_cats[abundance_meatdata$host == "human" & abundance_meatdata$biome == "oral"] = "oral"
+abundance_meatdata$new_cats[abundance_meatdata$host == "mouse" & abundance_meatdata$biome == "gut"] = "mouse"
+abundance_meatdata$new_cats[abundance_meatdata$host == "mouse" & abundance_meatdata$biome == "cecal"] = "mouse"
+abundance_meatdata$new_cats[abundance_meatdata$host == "moose" & abundance_meatdata$biome == "rumen"] = "moose"
+abundance_meatdata$new_cats[abundance_meatdata$host == "human" & abundance_meatdata$biome == "nasal"] = "nasal"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "Phylloplane"] = "plant"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "phyllosphere"] = "plant"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "rhizosphere"] = "rhizosphere"
+abundance_meatdata$new_cats[abundance_meatdata$host == "human" & abundance_meatdata$biome == "skin"] = "skin"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "soil"] = "soil"
+abundance_meatdata$new_cats[abundance_meatdata$biome == "Soil"] = "soil"
+abundance_meatdata$new_cats[abundance_meatdata$host == "human" & abundance_meatdata$biome == "vaginal"] = "vaginal"
+
+abundance_meatdata_nonhuman = abundance_meatdata[abundance_meatdata$new_cats != "airway" & 
+                               abundance_meatdata$new_cats != "gut" &  
+                              abundance_meatdata$new_cats != "nasal" &
+                                abundance_meatdata$new_cats != "nasal" &
+                                abundance_meatdata$new_cats != "oral" &
+                                abundance_meatdata$new_cats != "skin" &
+                             abundance_meatdata$new_cats != "vaginal",]
+
+abundance_meatdata_mostdepth = abundance_meatdata_nonhuman %>% group_by(new_cats) %>% top_n(3,wt=readNumber)
+abundance_meatdata_mostdepth = abundance_meatdata_mostdepth[order(abundance_meatdata_mostdepth$new_cats,abundance_meatdata_mostdepth$readNumber),]
+abundance_meatdata_mostdepth = as.data.frame(abundance_meatdata_mostdepth)
+abundance_meatdata_mostdepth_cat_readnum = abundance_meatdata_mostdepth[,c("ERR_ID","new_cats","readNumber")]
+
+# custom neccessary is plant, mouse, chicken (only need 2),
+
+# mouse
+#ERR3357527 47253831
+#ERR3357550	44705751
+#ERR3357569	42054520
+#plant
+#ERR6050321	67588558
+#ERR6050322	57616956
+#ERR6050323	60084998
+#chicken
+#ERR3414571	82430079
+#ERR3414572	92886393
+#ERR3414573	85337821
+
+# remove chicken, plant and mouse
+abundance_meatdata_mostdepth_cat_readnum = abundance_meatdata_mostdepth_cat_readnum[abundance_meatdata_mostdepth_cat_readnum$new_cats != "chicken" &
+                                           abundance_meatdata_mostdepth_cat_readnum$new_cats != "plant" &
+                                           abundance_meatdata_mostdepth_cat_readnum$new_cats != "mouse",]
+
+new_nonhuman_df = data.frame(ERR_ID=c("ERR3357527","ERR3357550","ERR3357569","ERR6050321","ERR6050322","ERR6050323","ERR3414571","ERR3414572","ERR3414573"),new_cats=c(rep("mouse",3),rep("plant",3),rep("chicken",3)),readNumber=c(47253831,44705751,42054520,67588558,57616956,60084998,82430079,92886393,85337821))
+
+abundance_meatdata_mostdepth_cat_readnum = rbind(abundance_meatdata_mostdepth_cat_readnum,new_nonhuman_df)
+abundance_meatdata_mostdepth_cat_readnum = abundance_meatdata_mostdepth_cat_readnum[,-3]
+colnames(abundance_meatdata_mostdepth_cat_readnum)[1] = "sample"
+abundance_meatdata_mostdepth_cat_readnum$Run = abundance_meatdata_mostdepth_cat_readnum[,1]
+colnames(abundance_meatdata_mostdepth_cat_readnum)[2] = "ecology"
+abundance_meatdata_mostdepth_cat_readnum$human_nonhuman = "nonhuman"
+# reformat
+catalog_metada_human_top5_eco_readNum = catalog_metada_human_top5_eco_readNum[,-3]
+catalog_metada_human_top5_eco_readNum$human_nonhuman = "human"
+
+samples_for_rarefaction = rbind(abundance_meatdata_mostdepth_cat_readnum,catalog_metada_human_top5_eco_readNum)
+write.table(samples_for_rarefaction,file="rarefaction_samples.txt",sep="\t",col.names=FALSE,row.names=FALSE,quote=FALSE)
+```
+
+#Download samples on o2
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/rarefaction_analysis
+
+mkdir fastq_outputs
+
+# do some testing to make sure it works
+tail -n 7 rarefaction_samples.txt | head -n 1 > test_single_run.txt
+
+while read line
+do
+sample=$(echo ${line} | awk '{print $1}')
+ecology=$(echo ${line} | awk '{print $2}')
+runs=$(echo ${line} | awk '{print $3}')
+sbatch -c 1 -t 0-01:00 -p short --mem=5G download_samples.bash ${sample} ${runs} ${ecology} fastq_outputs 1
+done < test_single_run.txt
+
+tail -n 8 rarefaction_samples.txt | head -n 1 > test_multiples_runs.txt
+
+while read line
+do
+sample=$(echo ${line} | awk '{print $1}')
+ecology=$(echo ${line} | awk '{print $2}')
+runs=$(echo ${line} | awk '{print $3}')
+sbatch -c 1 -t 0-01:00 -p short --mem=5G download_samples.bash ${sample} ${runs} ${ecology} fastq_outputs 1
+done < test_multiples_runs.txt
+
+# remove the ones already done and run the rest of the samples
+grep -E -v "HMP_2012__SRS011111|HMP_2012__SRS023468" rarefaction_samples.txt > rarefaction_samples_still_to_do.txt
+
+while read line
+do
+sample=$(echo ${line} | awk '{print $1}')
+ecology=$(echo ${line} | awk '{print $2}')
+runs=$(echo ${line} | awk '{print $3}')
+sbatch -c 1 -t 0-02:00 -p short --mem=5G download_samples.bash ${sample} ${runs} ${ecology} fastq_outputs 1
+done < rarefaction_samples_still_to_do.txt
+
+```
+
+#Do downsampling
+
+```{bash}
+ls /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/rarefaction_analysis/fastq_outputs/*/*/*.fastq > all_fastq_files.txt
+
+head -n 1 all_fastq_files.txt > test_fastq_to_sample.txt
+
+while read line; do sbatch /home/sez10/kostic_lab/gene_catalogue/sampling_code/run_seqtk.bash $line; done < test_fastq_to_sample.txt
+
+# do the rest of the samples
+tail -n +2 all_fastq_files.txt > all_fastq_files_left_to_sample.txt
+
+while read line; do sbatch /home/sez10/kostic_lab/gene_catalogue/sampling_code/run_seqtk.bash $line; done < all_fastq_files_left_to_sample.txt
+
+```
+
+#Gzip downsampled
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/rarefaction_analysis
+
+sbatch -c 1 -t 0-11:59 -p short --mem=5G gzip_rarefaction.bash 5M
+sbatch -c 1 -t 0-11:59 -p short --mem=5G gzip_rarefaction.bash 10M
+
+sbatch -c 1 -t 0-11:59 -p short --mem=5G gzip_rarefaction.bash 20M
+sbatch -c 1 -t 0-11:59 -p short --mem=5G gzip_rarefaction.bash 30M
+sbatch -c 1 -t 0-11:59 -p short --mem=5G gzip_rarefaction.bash 40M
+
+# that didn't finish so lets just gzip 10 per job
+
+ls fastq_outputs/*/*/*/*.fastq > fastq_files_to_gzip
+mkdir gzip_input_folder
+split -l 10 fastq_files_to_gzip gzip_input_folder/fastq_files_to_gzip_
+
+for x in gzip_input_folder/fastq_files_to_gzip_*
+do
+sbatch -c 1 -t 0-11:59 -p short --mem=5G gzip_files.bash ${x}
+done
+```
+
+
+#Make input file
+
+```{r}
+OneK_input <- list.files(pattern="1K",recursive = T,include.dirs=T)
+TenK_input <- list.files(pattern="10K",recursive = T,include.dirs=T)
+OneHundredK_input <- list.files(pattern="100K",recursive = T,include.dirs=T)
+FiveHundredK_input <- list.files(pattern="500K",recursive = T,include.dirs=T)
+OneM_input <- list.files(pattern="1M",recursive = T,include.dirs=T)
+FiveM_input <- list.files(pattern="5M",recursive = T,include.dirs=T)
+TenM_input <- list.files(pattern="10M",recursive = T,include.dirs=T)
+TwentyM_input <- list.files(pattern="20M",recursive = T,include.dirs=T)
+ThirtyM_input <- list.files(pattern="30M",recursive = T,include.dirs=T)
+FortyM_input <- list.files(pattern="40M",recursive = T,include.dirs=T)
+all_input_folders <- c(OneK_input,TenK_input,OneHundredK_input,FiveHundredK_input,OneM_input,FiveM_input,TenM_input,TwentyM_input,ThirtyM_input,FortyM_input)
+all_input_files = lapply(all_input_folders,function(x) list.files(x,pattern=".fastq.gz",full.names = T))
+names(all_input_files) <- all_input_folders
+pasted_file_names = lapply(all_input_files, function(x) paste(x,collapse =","))
+pasted_file_names <- unlist(pasted_file_names)
+sampleNames = sapply(strsplit(names(pasted_file_names),split="/"),function(x) paste(x[2:3],collapse="_"))
+myDf <- data.frame(sampleNames,pasted_file_names)
+write.table(myDf,file="assembly_input_random_samp_files.txt",quote=F,sep="\t",col.names=F,row.names=F)
+
+```
+
+# Now assemble all samples
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/rarefaction_analysis/fastq_outputs
+mkdir tmp
+# testing
+
+/home/sez10/kostic_lab/gene_catalogue/sampling_code/batch_run_pipeline_megahit_only.bash assembly_input_random_samp_files.txt assembly_output /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism tmp 8 > pipeline_IDs_october6_2022_permutations.txt
+
+# some ran out of memory or timed out
+
+sacct -S 2022-10-06 | grep "run_pipel" | grep -v "FAILED" | grep -v "COMPLETED" | awk '{print $1}' | while read line; do cat slurm-${line}.out | head -n 1 | awk '{print $10}' | awk -F '=' '{print $2}'; done | while read line; do grep ${line} assembly_input_random_samp_files.txt; done  > assembly_input_random_samp_files_still_to_do.txt
+
+# remove samples that need to be redone
+cat assembly_input_random_samp_files_still_to_do.txt | awk '{print $1}' | while read line; do rm -r assembly_output/${line}; done
+
+# redo but increase time and memory and change to medium partition
+/home/sez10/kostic_lab/gene_catalogue/sampling_code/batch_run_pipeline_megahit_only.bash assembly_input_random_samp_files_still_to_do.txt assembly_output /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism tmp 8 > pipeline_IDs_october6_2022_permutations.txt
+```
+
+
+# I messed up the glacier samples because I put a / in the permafrost/glacier which made new folder. ugh. lets fix that and redo
+
+#First we need to do the downsampling
+
+```{bash}
+ls /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/rarefaction_analysis/fastq_outputs/permafrost/*/*.fastq.gz > permafrost_fastq_files.txt
+
+
+while read line; do sbatch /home/sez10/kostic_lab/gene_catalogue/sampling_code/run_seqtk.bash $line; done < permafrost_fastq_files.txt
+
+```
+
+
+```{r}
+OneK_input <- list.files("permafrost",pattern="1K",recursive = T,include.dirs=T,full.names = TRUE)
+TenK_input <- list.files("permafrost",pattern="10K",recursive = T,include.dirs=T,full.names = TRUE)
+OneHundredK_input <- list.files("permafrost",pattern="100K",recursive = T,include.dirs=T,full.names = TRUE)
+FiveHundredK_input <- list.files("permafrost",pattern="500K",recursive = T,include.dirs=T,full.names = TRUE)
+OneM_input <- list.files("permafrost",pattern="1M",recursive = T,include.dirs=T,full.names = TRUE)
+FiveM_input <- list.files("permafrost",pattern="5M",recursive = T,include.dirs=T,full.names = TRUE)
+TenM_input <- list.files("permafrost",pattern="10M",recursive = T,include.dirs=T,full.names = TRUE)
+TwentyM_input <- list.files("permafrost",pattern="20M",recursive = T,include.dirs=T,full.names = TRUE)
+ThirtyM_input <- list.files("permafrost",pattern="30M",recursive = T,include.dirs=T,full.names = TRUE)
+FortyM_input <- list.files("permafrost",pattern="40M",recursive = T,include.dirs=T,full.names = TRUE)
+all_input_folders <- c(OneK_input,TenK_input,OneHundredK_input,FiveHundredK_input,OneM_input,FiveM_input,TenM_input,TwentyM_input,ThirtyM_input,FortyM_input)
+all_input_files = lapply(all_input_folders,function(x) list.files(x,pattern=".fastq",full.names = T))
+names(all_input_files) <- all_input_folders
+pasted_file_names = lapply(all_input_files, function(x) paste(x,collapse =","))
+pasted_file_names <- unlist(pasted_file_names)
+sampleNames = sapply(strsplit(names(pasted_file_names),split="/"),function(x) paste(x[2:3],collapse="_"))
+myDf <- data.frame(sampleNames,pasted_file_names)
+write.table(myDf,file="assembly_input_random_samp_files_permafrost.txt",quote=F,sep="\t",col.names=F,row.names=F)
+
+```
+
+#Now assemble permafrost files
+
+```{bash}
+/home/sez10/kostic_lab/gene_catalogue/sampling_code/batch_run_pipeline_megahit_only.bash assembly_input_random_samp_files_permafrost.txt assembly_output /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism tmp 8 > pipeline_IDs_october9_2022_permutations.txt
+
+```
+
+
+```{r}
+library(data.table)
+# Now make rarefaction curves!
+
+setwd("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/rarefaction_analysis/fastq_outputs")
+prokka_files = list.files("assembly_output",pattern=".tsv",recursive = TRUE,full.names = TRUE)
+#fastq_files = read.table("assembly_input_random_samp_files.txt",sep="\t",header=FALSE)
+#fastq_files = unlist(strsplit(fastq_files[,2],","))
+#fastq_files = list.files(".",pattern=".fastq.gz",recursive = TRUE,full.names = TRUE)
+fastq_files = fread(cmd="ls -d */* | grep -v assembly_output",header=FALSE)
+fastq_files = fastq_files$V1
+fastq_files_split = strsplit(fastq_files,split="/")
+biome = sapply(fastq_files_split,function(x) x[1])
+sample = sapply(fastq_files_split,function(x) x[2])
+metadata = data.frame(sample,biome)
+# count number of genes
+num_genes_per_file = sapply(prokka_files, function(x) {
+  prokka_df = read.table(x,sep="\t",header=TRUE,quote="")
+  num_genes = nrow(prokka_df[prokka_df$ftype=="gene",])
+})
+sample_depth = sapply(strsplit(names(num_genes_per_file),split="/"), function(x) x[2])
+sample_only = sapply(strsplit(sample_depth,split="_"), function(x) paste(x[1:length(x)-1],collapse="_"))
+depth_only = sapply(strsplit(sample_depth,split="_"), function(x) x[length(x)])
+sample_depth_df = data.frame(sample=sample_only,depth=depth_only,num_genes_per_file)
+
+metadata_all = merge(metadata,sample_depth_df,by="sample",all.x=TRUE)
+metadata_all$biome_depth = paste(metadata_all$biome,"_",metadata_all$depth,sep="")
+metadata_all_dt = as.data.table(metadata_all)
+# calculate mean and sd for each biome, depth pair
+metadata_all_dt_summary = metadata_all_dt[,.(mean_gene=mean(num_genes_per_file),sd_gene=sd(num_genes_per_file),sampleNumber=.N),by=biome_depth]
+metadata_all_dt_summary = as.data.frame(metadata_all_dt_summary)
+# calculate confidence interval
+metadata_all_dt_summary$CI_upper = metadata_all_dt_summary$mean + (1.96 * (metadata_all_dt_summary$sd_gene/sqrt(metadata_all_dt_summary$sampleNumber)))
+metadata_all_dt_summary$CI_lower = metadata_all_dt_summary$mean - (1.96 * (metadata_all_dt_summary$sd_gene/sqrt(metadata_all_dt_summary$sampleNumber)))
+
+metadata_all_dt_summary$biome = sapply(strsplit(metadata_all_dt_summary[,1],split="_"), function(x) paste(x[1:length(x)-1],collapse="_"))
+metadata_all_dt_summary$depth = sapply(strsplit(metadata_all_dt_summary[,1],split="_"), function(x) x[length(x)])
+metadata_all_dt_summary$depth = factor(metadata_all_dt_summary$depth,levels = c("1K","10K","100K","500K","1M","5M","10M","20M","30M","40M"))
+# order biome by 40M mean gene num
+metadata_all_dt_summary_40Monly = metadata_all_dt_summary[metadata_all_dt_summary$depth == "40M",]
+biome_ordered = metadata_all_dt_summary_40Monly[order(metadata_all_dt_summary_40Monly$mean_gene,decreasing=TRUE),"biome"]
+metadata_all_dt_summary$biome = factor(metadata_all_dt_summary$biome,levels = biome_ordered)
+
+library(pals)
+library(ggplot2)
+
+mycolors = polychrome(17)
+# replace second color with another darker grey
+mycolors[2] = "#EB984E"
+
+pdf("rarefaction_curve.pdf")
+ggplot(metadata_all_dt_summary,aes(x=depth,y=mean_gene,group=biome,color=biome)) + geom_line() + geom_point() +   geom_errorbar(aes(ymin=mean_gene-sd_gene, ymax=mean_gene+sd_gene), width=.2, position=position_dodge(0.05)) + scale_color_manual(values=as.vector(mycolors)) + theme_classic()
+dev.off()
+
+pdf("rarefaction_curve_with_CI.pdf")
+ggplot(metadata_all_dt_summary,aes(x=depth,y=mean_gene,group=biome,color=biome)) + geom_line() + geom_point() +   geom_errorbar(aes(ymin=CI_lower, ymax=CI_upper), width=.2, position=position_dodge(0.05)) + scale_color_manual(values=as.vector(mycolors)) + theme_classic()
+dev.off()
+
+```
+

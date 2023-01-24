@@ -164,3 +164,17 @@ The only difference between scripts in run_DIAMOND_with_CAT_postprocessing and r
 
 subsampled_overlap_analysis_revision has all scripts to calculate heatmap in Figure 2 as well as the alpha and beta diversities at the species and gene level. Also, unique cow gene figures are also in this folder.
 
+### Compare the number and type of unique genes in our gene catalog to other gene catalogs like KEGG, orthoDB, and eggNOG
+
+Find all scripts to do the above in gene_cat_to_other_gene_cat_comparisons
+
+### Compare the number of correct species level annotations between pathogens and non-pathogens
+
+Find all related scripts in pathogen_nonpathogen_annotations 
+
+
+### Perform rarefaction analysis to see if the number of genes change with the sequencing depth of samples from each ecology
+
+Find all scripts to perform rarefaction analyis in folder rarefaction_analysis
+
+

@@ -1,0 +1,108 @@
+---
+title: "annotate_pathogens_non_pathogens"
+author: "Sam Zimmerman"
+date: "2022-08-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# first create file for annotating genes
+library(taxonomizr)
+setwd("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/pathogen_nonpathogen_annotations")
+taxaNames = read.names.sql('/n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/names.dmp','IDtaxa.sql')
+taxaNodes = read.nodes.sql('/n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/nodes.dmp','IDtaxa.sql')
+
+```
+
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/pathogen_nonpathogen_annotations
+mkdir annotations_output
+
+# first unzip files
+for x in fna_files/*.fna.gz
+do
+gunzip ${x}
+done
+
+sbatch -c 4 -t 0-03:00 -p short --mem=18G run_LCA_on_genomes.bash fna_files/GCF_000006765.1_ASM676v1_genomic.fna annotations_output 4
+
+for x in fna_files/*.fna
+do
+sbatch -c 4 -t 0-04:00 -p short --mem=18G run_LCA_on_genomes.bash ${x} annotations_output 4
+done
+
+# one timed out 
+sbatch -c 5 -t 0-10:00 -p short --mem=20G run_LCA_on_genomes.bash fna_files/GCF_000277125.1_ASM27712v1_genomic.fna annotations_output 5
+
+```
+
+##perform locally
+
+```{r}
+setwd("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/pathogen_nonpathogen_annotations/")
+
+library(ggplot2)
+
+output_files = list.files("output_files/",full.names = TRUE)
+
+output_list = lapply(output_files,function(x) read.csv(x,header=TRUE))
+
+# for each taxa get the proportion that have species level annotations
+statistics_species_level_annotations = lapply(output_list, function(df_temp) {
+  organism_name = unique(df_temp$actual_organism)
+  organism_name = paste(strsplit(organism_name,split=" ")[[1]][c(1,2)],collapse = " ")
+  type = unique(df_temp$type)
+  
+  if(organism_name == "Weizmannia coagulans") {
+    percent_species_level = sum(df_temp$species == "Bacillus coagulans",na.rm=TRUE)/nrow(df_temp)  
+  } else if(organism_name == "Lacticaseibacillus casei") {
+    percent_species_level = sum(df_temp$species == "Lactobacillus casei",na.rm=TRUE)/nrow(df_temp)
+  } else if(organism_name == "Lactiplantibacillus pentosus") {
+    percent_species_level = sum(df_temp$species == "Lactobacillus pentosus",na.rm=TRUE)/nrow(df_temp)
+  } else if(organism_name == "Latilactobacillus curvatus") {
+    percent_species_level = sum(df_temp$species == "Lactobacillus curvatus",na.rm=TRUE)/nrow(df_temp)
+  } else {
+    percent_species_level = sum(organism_name == df_temp$species,na.rm=TRUE)/nrow(df_temp)
+  }
+  percent_species_level = percent_species_level * 100
+  #percent_species_level = length(which(!is.na(df_temp$species)))/nrow(df_temp)
+  return(c(organism_name,type,percent_species_level))
+})
+statistics_species_level_annotations = do.call("rbind",statistics_species_level_annotations)
+statistics_species_level_annotations = as.data.frame(statistics_species_level_annotations)
+colnames(statistics_species_level_annotations) = c("organism","type","percent")
+statistics_species_level_annotations$percent = as.numeric(statistics_species_level_annotations$percent)
+statistics_species_level_annotations$type = as.factor(statistics_species_level_annotations$type)
+statistics_species_level_annotations = statistics_species_level_annotations[order(statistics_species_level_annotations$percent),]
+jpeg("proportion_genes_species_level.jpg")
+ggplot(statistics_species_level_annotations,aes(x=type,y=percent)) + geom_boxplot(outlier.shape = NA) + geom_jitter() + ylab("Percent of genes with species level annotations") + theme_classic()
+dev.off()
+pdf("proportion_genes_species_level.pdf")
+statistics_species_level_annotations_plot = ggplot(statistics_species_level_annotations,aes(x=type,y=percent)) + geom_boxplot(outlier.shape = NA) + geom_jitter() + ylab("Percent of genes with species level annotations") + theme_classic()
+print(statistics_species_level_annotations_plot)
+dev.off()
+
+
+t.test(formula=percent ~ type ,data=statistics_species_level_annotations,alternative="two.sided")
+
+pathogen_percs = statistics_species_level_annotations[statistics_species_level_annotations$type=="pathogen","percent"]
+commensal_percs = statistics_species_level_annotations[statistics_species_level_annotations$type=="non-pathogenic","percent"]
+diff_means = mean(commensal_percs)-mean(pathogen_percs)
+pooled_sd = sqrt((sd(commensal_percs) + sd(pathogen_percs))/2)
+
+cohens_d = diff_means/pooled_sd
+
+# check power necessary 
+library(pwr)
+# find necessary cohens d
+pwr.t.test(n=20,power=0.8,sig.level=0.05,type="two.sample",alternative="two.sided") # d = 0.9091587
+# find sample number given current cohen's D
+pwr.t.test(d=cohens_d,power=0.8,sig.level=0.05,type="two.sample",alternative="two.sided") # n = 70.85757
+
+```
+

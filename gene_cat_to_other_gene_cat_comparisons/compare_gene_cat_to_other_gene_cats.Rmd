@@ -1,0 +1,250 @@
+---
+title: "align_gene_cat_to_other_dbs"
+author: "Sam Zimmerman"
+date: "2022-08-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/align_gene_cat_to_eggNOG_KEGG_OrthoDB_METAHIT
+
+# downloaded KEGG files on August 31, 2022
+wget https://www.genome.jp/ftp/db/kofam/ko_list.gz
+wget https://www.genome.jp/ftp/db/kofam/profiles.tar.gz
+# subcatalogs_GMGC10.95nr.faa.gz also got on August 31, 2022
+cd profiles
+cat *.hmm > kegg_profiles
+# not sure if this step is necessary
+conda activate /home/sez10/miniconda3_2/envs/interproscan
+hmmpress kegg_profiles
+cd ..
+
+# for hmmsearch using sig thresholds of 0.01 and reporting threshold of 1. these are defaults on https://www.ebi.ac.uk/Tools/hmmer/search/hmmsearch
+
+# to make hmmsearch run faster we arae going to divide our database into 117 pieces
+pyfasta split -n 117 /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.fasta
+
+sbatch -c 1 -t 00-10:00 -p short --mem=80G split_fasta.bash
+
+#sbatch -c 10 -t 01-00:00 -p medium --mem=60G run_hmmsearch.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.fasta kegg 10 profiles/kegg_profiles 117629181
+
+for x in /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.*.fasta
+do
+iterNum=$(echo ${x} | awk -F '.' '{print $2}')
+echo ${iterNum}
+sbatch -c 10 -t 00-11:59 -p short --mem=7G run_hmmsearch.bash ${x} kegg_${iterNum} 10 profiles/kegg_profiles 117629181
+done
+
+
+# some timed out so rerun
+sbatch -c 10 -t 00-18:59 -p medium --mem=7G run_hmmsearch.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.007.fasta kegg_007 10 profiles/kegg_profiles 117629181
+
+sbatch -c 10 -t 00-18:59 -p medium --mem=7G run_hmmsearch.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.030.fasta kegg_030 10 profiles/kegg_profiles 117629181
+
+sbatch -c 10 -t 00-18:59 -p medium --mem=7G run_hmmsearch.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.031.fasta kegg_031 10 profiles/kegg_profiles 117629181
+
+sbatch -c 10 -t 00-18:59 -p medium --mem=7G run_hmmsearch.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.090.fasta kegg_090 10 profiles/kegg_profiles 117629181
+
+
+mkdir /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/align_gene_cat_to_eggNOG_KEGG_OrthoDB_METAHIT/eggnog-mapper-data
+
+sbatch -c 1 -t 00-11:59 -p short --mem=15G download_eggNog_data.bash 
+
+sbatch -c 10 -t 30-00:00 -p long --mem=60G run_eggNog.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.fasta 10 eggnog-mapper-data eggNog_out eggNog_tmp eggNog_output proteins
+
+
+# run eggNog in many pieces as well
+
+for x in /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.*.fasta
+do
+iterNum=$(echo ${x} | awk -F '.' '{print $2}')
+sbatch -c 10 -t 00-11:59 -p short --mem=20G run_eggNog.bash ${x} 10 eggnog-mapper-data eggNog_out/iter_${iterNum} eggNog_tmp/iter_${iterNum} eggNog_output_iter_${iterNum} proteins
+done
+
+# get input that didn't finish
+sacct -S 2022-09-12 | grep "run_eggNo" | grep "TIMEOUT" | awk '{print $1}' | while read line; do grep "emapper.py" slurm-${line}.out; done | awk '{print $4}' > eggNog_redo_sep13_2022.txt
+
+
+sbatch -c 10 -t 00-11:59 -p short --mem=20G run_eggNog_resume.bash /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.000.fasta 10 eggnog-mapper-data eggNog_out/iter_000 eggNog_tmp/iter_000 eggNog_output_iter_000 proteins
+
+tail -n +2 eggNog_redo_sep13_2022.txt > eggNog_redo_sep13_2022_v2.txt
+
+while read line
+do
+iterNum=$(echo ${line} | awk -F '.' '{print $2}')
+sbatch -c 10 -t 00-06:00 -p short --mem=5G run_eggNog_resume.bash ${line} 10 eggnog-mapper-data eggNog_out/iter_${iterNum} eggNog_tmp/iter_${iterNum} eggNog_output_iter_${iterNum} proteins
+done < eggNog_redo_sep13_2022_v2.txt
+
+# more didn't finish so get those and rerun again
+
+sacct -S 2022-09-11 | grep "run_eggNo" | grep "61817617" -A 1000 | grep -v "COMPLETED" | awk '{print $1}' | while read line; do grep "emapper.py" slurm-${line}.out; done | awk '{print $4}' > eggNog_redo_sep14_2022.txt
+
+while read line
+do
+iterNum=$(echo ${line} | awk -F '.' '{print $2}')
+sbatch -c 10 -t 00-11:59 -p short --mem=5G run_eggNog_resume.bash ${line} 10 eggnog-mapper-data eggNog_out/iter_${iterNum} eggNog_tmp/iter_${iterNum} eggNog_output_iter_${iterNum} proteins
+done < eggNog_redo_sep14_2022.txt
+
+# some still didn't finish. rerun!
+sacct -S 2022-09-14 | grep "run_eggNo" | grep "61904329" -A 1000 | grep -v "COMPLETED" | awk '{print $1}' | while read line; do grep "emapper.py" slurm-${line}.out; done | awk '{print $4}' > eggNog_redo_sep15_2022.txt
+
+while read line
+do
+iterNum=$(echo ${line} | awk -F '.' '{print $2}')
+sbatch -c 10 -t 00-11:59 -p short --mem=5G run_eggNog_resume.bash ${line} 10 eggnog-mapper-data eggNog_out/iter_${iterNum} eggNog_tmp/iter_${iterNum} eggNog_output_iter_${iterNum} proteins
+done < eggNog_redo_sep15_2022.txt
+
+
+
+# make diamond databases. first do it for subcatalogs_GMGC10.95nr.faa.gz
+sbatch -c 1 -t 00-11:59 -p short --mem=50G make_diamond_db.bash subcatalogs_GMGC10.95nr.faa.gz subcatalogs_GMGC10.95nr_db
+# https://v101.orthodb.org/download/odb10v1_all_fasta.tab.gz downloaded on September 1, 2022
+sbatch -c 1 -t 00-02:00 -p short --mem=10G make_diamond_db.bash odb10v1_all_fasta.tab.gz odb10v1_all_db
+# run diamond
+sbatch -c 10 -t 30-00:00 -p long --mem=60G run_diamond.bash odb10v1_all_db /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.fasta orthodb_alignment_output.txt 10
+
+sbatch -c 10 -t 30-00:00 -p long --mem=60G run_diamond.bash subcatalogs_GMGC10.95nr_db /n/scratch3/users/a/adk9/_RESTORE/adk9/orfleton/all_seqs_rep_30_collapsed_cluster.fasta subcatalogs_GMGC10.95nr_alignment_output.txt 10
+
+```
+
+#Make plots to show percent overlap between different gene catalogues 
+
+```{bash}
+
+# number or total genes in our gene catlalog: 117629181
+
+awk '$11 <1e-2' subcatalogs_GMGC10.95nr_alignment_output.txt | awk '{print $1}' | uniq | wc -l # 70916929 60% of my genes found in subcatalogs_GMGC10.95nr
+# do for OrhtoDB
+awk '$11 <1e-2' orthodb_alignment_output.txt | awk '{print $1}' | uniq | wc -l # 41115017 34.9% of my genes found in OrthoDB
+
+awk '$11 <1e-2' subcatalogs_GMGC10.95nr_alignment_output.txt | awk '{print $1}' | uniq > genes_found_in_GMG.txt
+awk '$11 <1e-2' orthodb_alignment_output.txt | awk '{print $1}' | uniq > genes_found_in_orthodb.txt
+```
+
+#Get percent of genes with a KEGG annotation
+
+```{r}
+# get kegg info
+
+library(data.table)
+
+kegg1 = fread(cmd="cat *_hmmout_table.txt | awk '{print $1}'",header=FALSE)
+
+all_unique_genes = unique(kegg1$V1)
+all_unique_genes = all_unique_genes[-match("#",all_unique_genes)]
+length(all_unique_genes) # 28553745
+(28553745/117629181) * 100 # 24.27437
+
+#Get % of our genes with eggNog annotations
+
+eggNog = fread(cmd="cat eggNog_out/*/eggNog_output_iter_*.emapper.annotations | awk '{print $1}'",header=FALSE)
+all_unique_genes_eggNog = unique(eggNog$V1)
+all_unique_genes_eggNog = all_unique_genes_eggNog[-match("#query",all_unique_genes_eggNog)]
+all_unique_genes_eggNog = all_unique_genes_eggNog[-match("##",all_unique_genes_eggNog)]
+length(all_unique_genes_eggNog) # 44549787
+(length(all_unique_genes_eggNog)/117629181) * 100 # 37.87307
+
+GMG_genes = fread("genes_found_in_GMG.txt",header=FALSE)
+GMG_genes = GMG_genes$V1
+
+orthdb_genes = fread("genes_found_in_orthodb.txt",header=FALSE)
+
+all_genes_found = c(orthdb_genes,GMG_genes,all_unique_genes_eggNog,all_unique_genes)
+all_genes_found = unique(all_genes_found)
+length(all_genes_found) # 72721857
+(length(all_genes_found)/117629181) * 100 # 61.82297
+
+```
+
+#Now do the other way around. Get the percent og other database genes in our gene catalog
+
+```{r}
+library(data.table)
+gmg_in_OV2 = fread(cmd="awk '{print $2}' subcatalogs_GMGC10.95nr_alignment_output.txt",header=FALSE)
+gmg_in_OV2 = unique(gmg_in_OV2$V1)
+length(gmg_in_OV2) # 175718027
+
+302655267 # total number of genes
+
+(length(gmg_in_OV2)/302655267) * 100 # 58.0588
+
+
+```
+
+#Now get percent of eggNog in our gene cat. number of og is 4415548
+
+```{r}
+library(data.table)
+eggNog = fread(cmd="cat eggNog_out/*/eggNog_output_iter_*.emapper.annotations | grep -v '#' | awk '{print $2}'",header=FALSE)
+all_unique_genes = unique(eggNog$V1)
+length(all_unique_genes) # 8020121
+#(length(all_unique_genes)/4415548) * 100 # 181.6337??
+
+# do percent of our genes found in eggNOG
+
+library(data.table)
+eggNog = fread(cmd="cat eggNog_out/*/eggNog_output_iter_*.emapper.annotations | grep -v '#' | awk '{print $1}'",header=FALSE)
+all_unique_genes = unique(eggNog$V1)
+length(all_unique_genes) # 44549785
+(length(all_unique_genes)/117629181) * 100 # 37.87307
+```
+
+#Percent of kegg genes in our gene cat. 24923 total profiles
+
+```{r}
+library(data.table)
+
+kegg1 = fread(cmd="cat *_hmmout_table.txt | awk '{print $3}'",header=FALSE)
+
+all_unique_genes = unique(kegg1$V1)
+all_unique_genes = all_unique_genes[-match("full",all_unique_genes)]
+all_unique_genes = all_unique_genes[-match("name",all_unique_genes)]
+all_unique_genes = all_unique_genes[-match("----------",all_unique_genes)]
+
+length(all_unique_genes) # 24884
+(24884/24923) * 100 # 99.84352
+
+
+```
+
+#Now do orthodb. 40614194 sequences in orthodb
+
+```{r}
+library(data.table)
+gmg_in_OV2 = fread(cmd="awk '{print $2}' orthodb_alignment_output.txt",header=FALSE)
+gmg_in_OV2 = unique(gmg_in_OV2$V1)
+length(gmg_in_OV2) # 26899390
+
+40614194 # total number of genes
+
+(length(gmg_in_OV2)/40614194) * 100 # 66.2315
+
+```
+
+
+```{r}
+perc_genes_found_in_all = (72721857/117629181) * 100 # 38.17703
+
+perc_our_genes_in_other = c(GMG=60,orthodb=30.9,kegg=24.27,eggNog=37.87,all=61.823)
+
+per_other_genes_in_our = c(GMG=58.06,orthodb=66.23,kegg=99.8)
+
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gene_cat_to_other_gene_cat_comparisons/Percent_our_genes_in_other_catalog.pdf")
+barplot(perc_our_genes_in_other,xlab=c("Database"),ylab=c("Percent of our genes in other catalogs"))
+dev.off()
+
+pdf("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gene_cat_to_other_gene_cat_comparisons/Percent_other_genes_in_our_catalog.pdf")
+barplot(per_other_genes_in_our,xlab=c("Database"),ylab=c("Percent of other genes in our catalog"))
+dev.off()
+jpeg("~/Dropbox (HMS)/Kostic_Lab/datasets/orfletonV2/complete_linkage_analysis/gene_cat_to_other_gene_cat_comparisons/Percent_other_genes_in_our_catalog.jpg")
+barplot(per_other_genes_in_our,xlab=c("Database"),ylab=c("Percent of other genes in our catalog"))
+dev.off()
+
+
+```
+
+##Number of genes completely novel, not in any database.
