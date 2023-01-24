@@ -1,0 +1,130 @@
+---
+title: "annotate_OV2_ORFs_contigs"
+author: "Sam Zimmerman"
+date: "2022-08-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#First 
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs
+
+```
+
+#From Locs O2 account
+
+```{bash}
+
+/n/scratch3/users/v/vnl3/_RESTORE/orfleton_v2_prokka_output/*_prokka_out.tar.gz > prokka_tar_files.txt
+split -l 1000 prokka_tar_files.txt input_files/prokka_tar_files_
+
+while read line
+do
+sbatch -c 5 -t 0-06:00 -p short --mem=15G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash ${line} 5 CAT_output
+done < input_files/prokka_tar_files_aa
+
+
+# get jobs that didn't work using my extremely long single piece of bash code
+sacct -S 2022-09-18 | grep "run_CAT.b" | grep -v "COMPLETED" | awk '{print $1}' | while read line; do grep -A 1 "Start Running Python script to format faa files correctly" slurm-${line}.out | tail -n 1; done | rev | cut -d '/' -f 2 | rev | while read line; do grep ${line}.tar.gz input_files/prokka_tar_files_aa; done > input_files/prokka_tar_files_aa_redo
+
+while read line
+do
+sbatch -c 5 -t 0-06:00 -p short --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash ${line} 5 CAT_output
+done < input_files/prokka_tar_files_aa_redo
+
+# jobs timed out. I'm stupid. 
+
+sacct -S 2022-09-20 | grep "run_CAT.b" | grep -v "COMPLETED" | awk '{print $1}' | while read line; do grep -A 1 "Start Running Python script to format faa files correctly" slurm-${line}.out | tail -n 1; done | rev | cut -d '/' -f 2 | rev | while read line; do grep ${line}.tar.gz input_files/prokka_tar_files_aa_redo; done > input_files/prokka_tar_files_aa_redo2
+
+while read line
+do
+sbatch -c 5 -t 0-11:59 -p short --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash ${line} 5 CAT_output
+done < input_files/prokka_tar_files_aa_redo2
+
+# more jobs still timed out
+
+sacct | grep "run_CAT.b" | grep -v "COMPLETED" | awk '{print $1}' | while read line; do grep -A 1 "Start Running Python script to format faa files correctly" slurm-${line}.out | tail -n 1; done | rev | cut -d '/' -f 2 | rev | while read line; do grep ${line}.tar.gz input_files/prokka_tar_files_aa_redo2; done > input_files/prokka_tar_files_aa_redo3
+
+while read line
+do
+sbatch -c 5 -t 1-00:00 -p medium --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash ${line} 5 CAT_output
+done < input_files/prokka_tar_files_aa_redo3
+
+# now redo the downstream annotations
+
+sbatch -c 1 -t 0-11:00 -p short --mem=5G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/annotate_CAT_batch.bash input_files/prokka_tar_files_aa 1 CAT_output
+
+# now do rest
+
+while read line
+do
+sbatch -c 5 -t 0-11:59 -p short --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash ${line} 5 CAT_output
+done < input_files/prokka_tar_files_ab
+
+while read line
+do
+sbatch -c 5 -t 0-11:59 -p short --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash ${line} 5 CAT_output
+done < input_files/prokka_tar_files_ac
+
+cat input_files/prokka_tar_files_ad input_files/prokka_tar_files_ae input_files/prokka_tar_files_af input_files/prokka_tar_files_ag input_files/prokka_tar_files_ah input_files/prokka_tar_files_ai input_files/prokka_tar_files_aj input_files/prokka_tar_files_ak input_files/prokka_tar_files_al input_files/prokka_tar_files_am input_files/prokka_tar_files_an input_files/prokka_tar_files_ao > input_files/prokka_tar_files_af_to_o
+
+sbatch -c 5 -t 0-11:59 -p short --mem=30G --array=1-10000%500 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT_array_job.bash input_files/prokka_tar_files_af_to_o 5 CAT_output
+
+# apparently Max array size is 10000 so I need to create a new input file for the last 1303 jobs
+
+tail -n 1303 input_files/prokka_tar_files_af_to_o > input_files/prokka_tar_files_last_1303_input.txt
+
+sbatch -c 5 -t 0-11:59 -p short --mem=30G --array=1-1303 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT_array_job.bash input_files/prokka_tar_files_last_1303_input.txt 5 CAT_output
+
+# I don't have all the data info so I am going to run DIAMOND plain on some data too
+
+ls /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/env_faa_files/*.fasta > /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/env_faa_file_list.txt
+
+sbatch -c 5 -t 0-11:59 -p short --mem=30G --array=1-1486 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_diamond_array_job.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/env_faa_file_list.txt 5 diamond_output
+
+# get timed out
+
+sacct --format="JobID%30,JobName,State" -S 2022-10-08 | grep "run_diamo+" | grep -v "COMPLETED" | awk '{print $1}' | cut -d '_' -f2 | while read line; do sed "${line}q;d" /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/env_faa_file_list.txt; done > env_samples_redo.txt
+
+sbatch -c 5 -t 2-00:00 -p medium --mem=30G --array=1-56 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_diamond_array_job.bash env_samples_redo.txt 5 diamond_output
+
+## also rerun CAT for the human samples that timed out
+
+sacct --format="JobID%30,JobName,State" -S 2022-09-28 | grep "62678741_" | grep "run_CAT_a+" | grep -v "COMPLETED" | awk '{print $1}' | cut -d '_' -f2 | while read line; do sed "${line}q;d" /n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/input_files/prokka_tar_files_af_to_o; done > human_samples_redo_1.txt
+
+
+sbatch -c 5 -t 2-00:00 -p medium --mem=30G --array=1-26 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT_array_job.bash human_samples_redo_1.txt 5 CAT_output # job ID 63309721
+
+# rerun CAT for the last 1,300 human samples
+
+sacct --format="JobID%30,JobName,State" -S 2022-09-28 | grep "62923085_" | grep "run_CAT_a+" | grep -v "COMPLETED" | awk '{print $1}' | cut -d '_' -f2 | while read line; do sed "${line}q;d" /n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/input_files/prokka_tar_files_last_1303_input.txt; done > human_samples_redo_2.txt
+
+sbatch -c 5 -t 2-00:00 -p medium --mem=30G --array=1-4 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT_array_job.bash human_samples_redo_2.txt 5 CAT_output # job ID 63309770
+
+
+# check if any other errors
+while read line; do basename ${line%.tar.gz}; done < input_files/prokka_tar_files_ab | while read line; do ls CAT_output/${line} | grep "ORF2LCA_named_CAT.txt"; done | wc -l
+
+# redo /n/scratch3/users/v/vnl3/_RESTORE/orfleton_v2_prokka_output/DavidLA_2015__LD-Run2-35_prokka_out.tar.gz
+
+sbatch -c 5 -t 2-00:00 -p medium --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_CAT.bash /n/scratch3/users/v/vnl3/_RESTORE/orfleton_v2_prokka_output/DavidLA_2015__LD-Run2-35_prokka_out.tar.gz 5 CAT_output
+
+
+# some still failed. so lets just do the diamond on these
+sacct --format="JobID%30,JobName,State" -S 2022-10-09 | grep "63309721_" | grep "run_CAT_a+" | grep -v "COMPLETED" | awk '{print $1}' | cut -d '_' -f2 | while read line; do sed "${line}q;d" /n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/human_samples_redo_1.txt; done > human_samples_redo_for_diamond_1.txt
+
+sacct --format="JobID%30,JobName,State" -S 2022-10-09 | grep "63309770_" | grep "run_CAT_a+" | grep -v "COMPLETED" | awk '{print $1}' | cut -d '_' -f2 | while read line; do sed "${line}q;d" /n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/human_samples_redo_2.txt; done > human_samples_redo_for_diamond_2.txt
+
+cat human_samples_redo_for_diamond_1.txt human_samples_redo_for_diamond_2.txt > human_samples_redo_for_diamond_all.txt
+
+# also need to redo /n/scratch3/users/v/vnl3/_RESTORE/orfleton_v2_prokka_output/DavidLA_2015__LD-Run2-35_prokka_out.tar.gz
+
+sbatch -c 5 -t 2-00:00 -p medium --mem=30G --array=1-9 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/annotate_contigs_ORFs/run_diamond_from_tar_array_job.bash human_samples_redo_for_diamond_all.txt 5 diamond_output # jobID 
+
+```
+

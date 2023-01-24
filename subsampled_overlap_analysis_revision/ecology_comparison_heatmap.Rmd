@@ -1,0 +1,1255 @@
+---
+title: "redo_ecology_comparison_heatmap"
+author: "Sam Zimmerman"
+date: "2022-09-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#First thing to do is to get prokka environment files. See get_number_genes_per_sample_clean.Rmd in github repo for how I got all the files in the folder /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs
+
+```{bash}
+
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap
+
+mkdir env_faa_files
+for x in /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_files_*
+do
+sbatch -n 1 -t 0-11:59 -p short --mem=10G scripts/get_non_human_faa_files.bash ${x} env_faa_files
+done
+
+# two file were not included so lets do those manually
+
+# first create file with the prokka IDs to search for
+
+# get all gene names
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap
+sbatch -n 1 -t 0-04:00 -p short --mem=10G scripts/get_last_two_glacier_geneNames.bash
+
+
+zcat /n/scratch3/users/a/adk9/_RESTORE/adk9/orfv2/pangenes/pan_genes.gz | grep ">" | grep -f last_2_glacier_prokka_IDs.txt -F > last_2_glacier_gene_names.txt
+cut -f 1 -d ' ' last_2_glacier_gene_names.txt | cut -c2- > last_2_glacier_gene_names_no_carrot.txt
+
+```
+
+#Now separate gene names into individual files
+
+```{r}
+library(data.table)
+gene_names = fread("last_2_glacier_gene_names_no_carrot.txt",header=F)
+sample_names = fread(cmd="awk -F'_' '{print $(NF-1)}' last_2_glacier_gene_names_no_carrot.txt",header=F)
+gene_names[, `:=`(sample = sample_names$V1)]
+gene_names[,write.table(V1,file=paste("/n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_",.BY,".txt",sep=""),col.names=F,row.names=F,quote=F),by = .(sample)]
+```
+
+#Now get the protein sequences from the last environment samples
+
+```{bash}
+
+# put the 2 files names into another file into glacier_filer_with_names_last2_files
+
+sbatch -n 1 -t 0-11:59 -p short --mem=10G scripts/get_non_human_faa_files.bash glacier_filer_with_names_last2_files env_faa_files
+
+```
+
+# Some timed out
+
+```{bash}
+sacct -S 2022-09-15 | grep "get_non_h" | grep -v "COMPLETED" | awk '{print $1}'
+
+# jobs 62013580 and 62013636
+
+sbatch -n 1 -t 1-00:00 -p medium --mem=10G scripts/get_non_human_faa_files.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_files_9038 env_faa_files
+
+sbatch -n 1 -t 1-00:00 -p medium --mem=10G scripts/get_non_human_faa_files.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_gene_counts/non_human_gene_counts/geneIDs/gene_name_files_9094 env_faa_files
+
+
+```
+
+
+#First get input
+
+```{bash}
+sbatch -c 1 -t 0-01:00 -p short --mem=5G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/get_samples.bash 4 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/tables_with_bootstrap_samples
+```
+
+#Next get samples and make gene catalog
+
+```{bash}
+for x in tables_with_bootstrap_samples/*.csv
+do
+sbatch -n 1 -t 0-11:59 -p short --mem=10G scripts/clusterProteins_andPrepInput.bash ${x}
+done
+```
+
+#Make plot showing average number of unique genes per ecology
+
+```{r}
+tsv_file = args[1] # iteration10_clustered/all_seqs_db_iteration10_clu.tsv
+metadata = args[2] # /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv
+
+library(data.table)
+library(ggplot2)
+cluster_folders = list.files(pattern="_clustered",full.names=TRUE)
+iteration_files = sapply(cluster_folders, function(myfolder) {
+  iteration_file = list.files(myfolder, pattern="_clu.tsv",full.names = TRUE)
+})
+
+metadata_df = read.csv(metadata)
+
+num_unique_genes_per_eco_cow_genes = lapply(iteration_files, function(tsv_file) {
+  mydf = fread(tsv_file,header=FALSE,sep="\t",data.table=FALSE)
+  colnames(mydf) = c("representative","cluster_member")
+  mydf$cluster_member_sample = sapply(strsplit(mydf$cluster_member,split="_"), function(x) x[length(x)-1])
+  mydf$ecology = metadata_df[match(mydf$cluster_member_sample,metadata_df$prokka_id),"ecology"]
+  # get unique rows only. since we want it to be binary. remove the cluster member. we just want to know whether the sample has at least one representative in the cluster
+  mydf_rep_ecology = unique(mydf[,-c(2,3)])
+  mydf_rep_ecology$freq = 1
+  mydf_rep_ecology_wide = reshape2::dcast(mydf_rep_ecology, ecology ~ representative,value.var="freq")
+  rownames(mydf_rep_ecology_wide) = mydf_rep_ecology_wide[,1]
+  mydf_rep_ecology_wide = mydf_rep_ecology_wide[,-1]
+  mydf_rep_ecology_wide = as.matrix(mydf_rep_ecology_wide)
+  mydf_rep_ecology_wide[is.na(mydf_rep_ecology_wide)] = 0
+  
+  # first get genes only in a single ecology.
+  mydf_rep_ecology_wide_singletons = mydf_rep_ecology_wide[,colSums(mydf_rep_ecology_wide) == 1]
+  # now for each gene get the ecology its in
+  row_indexes_gene_present_in = apply(mydf_rep_ecology_wide_singletons,2, function(x) which(x==1))
+  ecologies_of_singleton_genes = rownames(mydf_rep_ecology_wide_singletons)[row_indexes_gene_present_in]
+  
+  singleton_gene_ecology_df = data.frame(gene=colnames(mydf_rep_ecology_wide_singletons),ecology=ecologies_of_singleton_genes)
+  # now get number of unique genes per ecology
+  singleton_gene_ecology_dt = as.data.table(singleton_gene_ecology_df)
+  num_singletons_per_ecology = singleton_gene_ecology_dt[,.N,by=ecology]
+  num_singletons_per_ecology = num_singletons_per_ecology[order(ecology)]
+  num_singletons_per_ecology_vec = as.numeric(num_singletons_per_ecology$N)
+  names(num_singletons_per_ecology_vec) = num_singletons_per_ecology$ecology
+  # also specifically get the genes that are in cow gut only
+  cowGenes = singleton_gene_ecology_dt[ecology=="cow"]$gene
+  
+  return(list(num_singletons_per_ecology_vec,cowGenes))
+})
+
+saveRDS(num_unique_genes_per_eco_cow_genes,file=gsub(".tsv","_num_unique_genes_per_eco_cow_genes.rds",tsv_file))
+```
+
+```{bash}
+for x in iteration*_clustered/all_seqs_db_iteration*_clu.tsv
+do
+sbatch -n 1 -t 0-01:00 -p short --mem=15G scripts/get_number_unique_genes_cow_genes.bash ${x} /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv
+done
+
+
+```
+
+#Now make plot showing average number of genes per ecology
+
+```{r}
+library(ggplot2)
+cluster_folders = list.files(pattern="_clustered",full.names=TRUE)
+num_unique_genes_per_ecology = sapply(cluster_folders, function(myfolder) {
+  iteration_file = list.files(myfolder, pattern="_clu_num_singletons_per_ecology.tsv",full.names = TRUE)
+})
+
+num_unique_genes_per_ecology_all_iterations_list = lapply(num_unique_genes_per_ecology, function(x) read.table(x,sep="\t",header=TRUE,row.names=1))
+num_unique_genes_per_ecology_all_iterations_list = do.call("cbind",num_unique_genes_per_ecology_all_iterations_list)
+average_num_unique_genes = rowMeans(num_unique_genes_per_ecology_all_iterations_list)
+average_num_unique_genes = as.data.frame(average_num_unique_genes)
+average_num_unique_genes$ecology = rownames(average_num_unique_genes)
+average_num_unique_genes$label = round(average_num_unique_genes[,1])
+average_num_unique_genes$ecology = gsub("-",".",average_num_unique_genes$ecology)
+average_num_unique_genes$ecology = factor(average_num_unique_genes$ecology,levels=rev(c("vaginal","nasal","skin","plants","coral.reef","rhizosphere","terrestrial.soil","aquatic.sediment","aquatic","glacier.or.permafrost","cow","airways","oral","moose","chicken","gut","mouse")))
+pdf("average_num_unique_genes_each_ecology.pdf")
+ggplot(average_num_unique_genes,aes(x=ecology,y=average_num_unique_genes)) + geom_bar(stat='identity') + geom_text(aes(label = label), hjust = -0.05) + coord_flip() + theme_classic() + xlab("gene count") + ylab("") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) + ylim(0,500000)
+dev.off()
+```
+
+# get annotations for cow specific genes
+
+#First get an input file of cow prokka samples
+
+```{r}
+cluster_folders = list.files(pattern="_clustered",full.names=TRUE)
+cow_gene_files = sapply(cluster_folders, function(myfolder) {
+  iteration_file = list.files(myfolder, pattern="_cowgenes.txt",full.names = TRUE)
+})
+
+cow_genes_list = lapply(cow_gene_files, function(x) read.table(x,header=FALSE)[,1])
+cow_genes_list = unique(unlist(cow_genes_list))
+prokka_ids = sapply(strsplit(cow_genes_list,split="_"), function(x) x[2])
+prokka_ids = unique(prokka_ids)
+prokka_ids = unique(prokka_ids)
+prokka_ids = paste(prokka_ids,"_",sep="")
+write.table(prokka_ids,file="cow_prokka_ids.txt",col.names=FALSE,row.names=FALSE,quote=FALSE)
+```
+
+
+```{bash}
+# get annotations for cow specific genes
+# first search for prokka IDs from cows
+
+zcat pan_tsv_data.gz | grep -f cow_prokka_ids.txt -F > prokka_cow_annotations.txt
+
+# get all protein annotations of consensus genes
+
+grep ">" all_seqs_rep_30_collapsed_cluster.fasta | awk '{print $1}' | cut -c2- | cut -d'_' -f2- > consensus_gene_prokka_IDs.txt
+
+grep -f consensus_gene_prokka_IDs.txt -F > prokka_consensus_annotations.txt
+```
+
+
+##Now get functions of each gene
+
+```{r}
+library(data.table)
+prokka_annotations = fread("prokka_cow_annotations.txt",sep="\t",header=FALSE)
+prokka_annotations = prokka_annotations[V2!="gene"]
+
+cluster_folders = list.files(pattern="_clustered",full.names=TRUE)
+cow_gene_files = sapply(cluster_folders, function(myfolder) {
+  iteration_file = list.files(myfolder, pattern="_cowgenes.txt",full.names = TRUE)
+})
+
+# add COG information
+cog_info = read.table("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/cog-20.def.tab",header=FALSE,sep="\t")
+cog_cat_info = read.table("/n/data1/joslin/icrb/kostic/szimmerman/COG_files/fun-20.tab",sep="\t",header=FALSE)
+
+prokka_annotations$COG_cat_initials = cog_info[match(prokka_annotations$V6,cog_info$V1),"V2"]
+# now get cog categories
+prokka_cog_cat_names = apply(prokka_annotations, 1, function(x) {
+  cog_initials_split = strsplit(x["COG_cat_initials"],split="")[[1]]
+  cog_cat_names = paste(cog_cat_info[match(cog_initials_split,cog_cat_info[,1]),"V3"],collapse="_")
+  return(cog_cat_names)
+})
+prokka_annotations$cog_names = prokka_cog_cat_names
+
+cow_gene_protein_annotations = lapply(cow_gene_files, function(myfile) {
+  geneList = read.table(myfile,header=FALSE)
+  geneList = geneList[,1]
+  geneList = sapply(strsplit(geneList,split="_"), function(x) paste(x[-1],collapse="_"))
+  prokka_annotations_iteration = prokka_annotations[match(geneList,prokka_annotations$V1)]
+  protein_annotations = prokka_annotations_iteration$V7
+  protein_annotations = table(protein_annotations)
+  # convert to percentages of unique cow genes
+  protein_annotations_percentage = protein_annotations/sum(protein_annotations)
+  protein_annotations_percentage = protein_annotations_percentage*100
+  return(protein_annotations_percentage)
+})
+
+all_protein_annotation_names = unique(unlist(sapply(cow_gene_protein_annotations, function(x) names(x))))
+
+protein_perc_matrix = sapply(cow_gene_protein_annotations, function(protein_perc_list) {
+  protein_perc_list[match(all_protein_annotation_names,names(protein_perc_list))]
+})
+protein_perc_matrix[is.na(protein_perc_matrix)] = 0
+
+protein_perc_means = rowMeans(protein_perc_matrix)
+# calculate 95% CIs
+stderror = (apply(protein_perc_matrix,1, sd))/(sqrt(ncol(protein_perc_matrix)))
+
+confidence_interval = sapply(1:length(protein_perc_means), function(mycount) {
+  myMean = protein_perc_means[mycount]
+  mystderror = stderror[mycount]
+  upperCI = myMean + (1.96 * mystderror)
+  lowerCI = myMean - (1.96 * mystderror)
+  return(c(upperCI,lowerCI))
+})
+confidence_interval = t(confidence_interval)
+colnames(confidence_interval) = c("upperCI","lowerCI")
+mean_CI_df = data.frame(mean=protein_perc_means,upperCI=confidence_interval[,1],lowerCI=confidence_interval[,2])
+mean_CI_df$protein = names(protein_perc_means)
+mean_CI_df = mean_CI_df[order(mean_CI_df$mean,decreasing = TRUE),]
+# remove hypothetical proteins. 88.87955192% of proteins on average
+mean_CI_df = mean_CI_df[-match("hypothetical protein",mean_CI_df$protein),]
+mean_CI_df$protein = factor(mean_CI_df$protein,levels=mean_CI_df$protein)
+mean_CI_df_top20 = mean_CI_df[1:20,]
+library(ggplot2)
+pdf("top_20_cow_functions.pdf")
+ggplot(mean_CI_df_top20) + geom_bar(aes(x=protein, y=mean), stat="identity") + geom_errorbar(aes(x=protein, ymin=upperCI, ymax=lowerCI)) + coord_flip() + theme_classic() + xlab("protein") + ylab("Percent of unique genes")
+dev.off()
+
+
+#### do again for cow top protein functions but normalize by total number of proteins with consensus annotation
+
+consensus_seq_annotations = fread(cmd=paste("zcat /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/enrichments/all_seqs_rep_30_collapsed_cluster_names_tsv_data_v2.txt | grep 'CDS' | grep -v 'ftype'"),header=FALSE)
+
+consensus_gene_protein_annotations_counts = table(consensus_seq_annotations$V7)
+
+setkey(consensus_seq_annotations,V1)
+library(Matrix)
+cow_gene_protein_annotations_norm = lapply(cow_gene_files, function(myfile) {
+  geneList = read.table(myfile,header=FALSE)
+  geneList = geneList[,1]
+  geneList = sapply(strsplit(geneList,split="_"), function(x) paste(x[-1],collapse="_"))
+
+  consensus_seq_annotations_temp = consensus_seq_annotations[geneList]
+  
+  protein_annotations = table(consensus_seq_annotations_temp$V7)
+  
+  
+  consensus_gene_protein_annotations_counts_order_temp = consensus_gene_protein_annotations_counts[match(names(protein_annotations),names(consensus_gene_protein_annotations_counts))]
+  
+  temp_df = data.frame(name=names(protein_annotations),sample=as.numeric(protein_annotations),consensus=as.numeric(consensus_gene_protein_annotations_counts_order_temp))
+  rownames(temp_df) = temp_df[,1]
+  temp_df = temp_df[,-1]
+  
+  # do modified TF-IDF
+  total_proteins_in_sample = sum(temp_df$sample)
+  tf = temp_df$sample/total_proteins_in_sample
+  # idf 
+  idf <- temp_df$sample / temp_df$consensus
+  norm.data <- tf * idf
+  names(norm.data) = rownames(temp_df)
+  return(norm.data)
+})
+
+all_protein_annotation_names_norm = unique(unlist(sapply(cow_gene_protein_annotations_norm, function(x) names(x))))
+
+protein_perc_matrix_norm = sapply(cow_gene_protein_annotations_norm, function(protein_perc_list) {
+  protein_perc_list[match(all_protein_annotation_names_norm,names(protein_perc_list))]
+})
+protein_perc_matrix_norm[is.na(protein_perc_matrix_norm)] = 0
+
+protein_perc_means_norm = rowMeans(protein_perc_matrix_norm)
+# calculate 95% CIs
+stderror_norm = (apply(protein_perc_matrix_norm,1, sd))/(sqrt(ncol(protein_perc_matrix_norm)))
+
+confidence_interval_norm = sapply(1:length(protein_perc_means_norm), function(mycount) {
+  myMean = protein_perc_means_norm[mycount]
+  mystderror = stderror_norm[mycount]
+  upperCI = myMean + (1.96 * mystderror)
+  lowerCI = myMean - (1.96 * mystderror)
+  return(c(upperCI,lowerCI))
+})
+confidence_interval_norm = t(confidence_interval_norm)
+colnames(confidence_interval_norm) = c("upperCI","lowerCI")
+mean_CI_df_norm = data.frame(mean=protein_perc_means_norm,upperCI=confidence_interval_norm[,1],lowerCI=confidence_interval_norm[,2])
+mean_CI_df_norm$protein = names(protein_perc_means_norm)
+mean_CI_df_norm = mean_CI_df_norm[order(mean_CI_df_norm$mean,decreasing = TRUE),]
+# remove hypothetical proteins. 88.87955192% of proteins on average
+mean_CI_df_norm = mean_CI_df_norm[-match("hypothetical protein",mean_CI_df_norm$protein),]
+mean_CI_df_norm$protein = factor(mean_CI_df_norm$protein,levels=mean_CI_df_norm$protein)
+mean_CI_df_norm_top20 = mean_CI_df_norm[1:20,]
+library(ggplot2)
+pdf("top_20_cow_functions_norm.pdf")
+ggplot(mean_CI_df_norm_top20) + geom_bar(aes(x=protein, y=mean), stat="identity") + geom_errorbar(aes(x=protein, ymin=upperCI, ymax=lowerCI)) + coord_flip() + theme_classic() + xlab("protein") + ylab("Percent of unique genes")
+dev.off()
+
+## also do version with COG categories
+
+cow_gene_COG_annotations = lapply(cow_gene_files, function(myfile) {
+  geneList = read.table(myfile,header=FALSE)
+  geneList = geneList[,1]
+  geneList = sapply(strsplit(geneList,split="_"), function(x) paste(x[-1],collapse="_"))
+  prokka_annotations_iteration = prokka_annotations[match(geneList,prokka_annotations$V1)]
+  protein_annotations = prokka_annotations_iteration$cog_names
+  protein_annotations = strsplit(protein_annotations,split="_")
+  protein_annotations = unlist(protein_annotations)
+  protein_annotations = table(protein_annotations)
+  # convert to percentages of unique cow genes
+  protein_annotations_percentage = protein_annotations/nrow(prokka_annotations_iteration) # sum to more than one because proteins have multiple COG cats
+  protein_annotations_percentage = protein_annotations_percentage*100
+  return(protein_annotations_percentage)
+})
+
+all_COG_names = unique(unlist(sapply(cow_gene_COG_annotations, function(x) names(x))))
+COG_perc_matrix = sapply(cow_gene_COG_annotations, function(COG_perc_list) {
+  COG_perc_list[match(all_COG_names,names(COG_perc_list))]
+})
+COG_perc_matrix[is.na(COG_perc_matrix)] = 0
+rownames(COG_perc_matrix) = all_COG_names
+
+COG_perc_means = rowMeans(COG_perc_matrix)
+# calculate 95% CIs
+stderror_COG = (apply(COG_perc_matrix,1, sd))/(sqrt(ncol(COG_perc_matrix)))
+
+confidence_interval_COG = sapply(1:length(COG_perc_means), function(mycount) {
+  myMean = COG_perc_means[mycount]
+  mystderror = stderror_COG[mycount]
+  upperCI = myMean + (1.96 * mystderror)
+  lowerCI = myMean - (1.96 * mystderror)
+  return(c(upperCI,lowerCI))
+})
+confidence_interval_COG = t(confidence_interval_COG)
+colnames(confidence_interval_COG) = c("upperCI","lowerCI")
+
+mean_CI_COG_df = data.frame(mean=COG_perc_means,upperCI=confidence_interval_COG[,1],lowerCI=confidence_interval_COG[,2])
+mean_CI_COG_df$COG_name = names(COG_perc_means)
+mean_CI_COG_df = mean_CI_COG_df[order(mean_CI_COG_df$mean,decreasing = TRUE),]
+# remove NA 97.47129e% of proteins on average
+mean_CI_COG_df = mean_CI_COG_df[-match("NA",mean_CI_COG_df$COG_name),]
+mean_CI_COG_df$COG_name = factor(mean_CI_COG_df$COG_name,levels=mean_CI_COG_df$COG_name)
+mean_CI_COG_df = mean_CI_COG_df[1:20,]
+
+pdf("top_20_cow_GOG_functions.pdf")
+ggplot(mean_CI_COG_df) + geom_bar(aes(x=COG_name, y=mean), stat="identity") + geom_errorbar(aes(x=COG_name, ymin=upperCI, ymax=lowerCI)) + coord_flip() + theme_classic() + xlab("COG") + ylab("Percent of unique genes")
+dev.off()
+
+```
+
+#Create distance matrixes using jaccard dist for each iteration
+
+```{bash}
+
+for x in iteration*_clustered/all_seqs_db_iteration*_clu.tsv
+do
+sbatch -n 1 -t 0-01:00 -p short --mem=15G scripts/calc_distance_matrixes.bash ${x} /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv
+done
+```
+
+```{r}
+library(data.table)
+metadata_df = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+metadata_df_dt = as.data.table(metadata_df)
+mean_orf_num_by_ecology = metadata_df_dt[,mean(raw_orf_count),by=ecology]
+variance_orf_num_by_ecology = metadata_df_dt[,sd(raw_orf_count),by=ecology]
+
+# compute beta diversity on each dist matrix
+four_samp_per_eco_dist_mat_files = list.files(pattern="_clusample_jaccard_mat.tsv",recursive = TRUE,full.names = TRUE)
+
+four_samp_per_eco_dist_mat_list = lapply(four_samp_per_eco_dist_mat_files, function(dist_mat_file) {
+  dist_mat = read.csv(dist_mat_file)
+  rownames(dist_mat) = dist_mat[,1]
+  dist_mat = dist_mat[,-1]
+  dist_mat_wide <- reshape2::melt(as.matrix(dist_mat), varnames = c("row", "col"))
+  dist_mat_wide = dist_mat_wide[as.numeric(dist_mat_wide$row) > as.numeric(dist_mat_wide$col), ]
+  dist_mat_wide$ecology_row = metadata_df[match(dist_mat_wide$row,metadata_df$prokka_id),"ecology"]
+  dist_mat_wide$ecology_col = metadata_df[match(dist_mat_wide$col,metadata_df$prokka_id),"ecology"]
+  dist_mat_wide$same_or_diff = dist_mat_wide$ecology_row == dist_mat_wide$ecology_col
+  dist_mat_wide$same_or_diff[dist_mat_wide$same_or_diff == FALSE] = "different"
+  dist_mat_wide$same_or_diff[dist_mat_wide$same_or_diff == TRUE] = "same"
+  dist_mat_wide_same_type_beta = dist_mat_wide[dist_mat_wide$same_or_diff == "same",]
+  return(dist_mat_wide_same_type_beta)
+})
+four_samp_per_eco_dist_mat_list = do.call("rbind",four_samp_per_eco_dist_mat_list)
+# remove duplicated comparisons
+four_samp_per_eco_dist_mat_list = four_samp_per_eco_dist_mat_list[-which(duplicated(four_samp_per_eco_dist_mat_list[,c(1,2)])),]
+four_samp_per_eco_dist_mat_dt = as.data.table(four_samp_per_eco_dist_mat_list)
+avg_jaccard_per_ecology_samp = four_samp_per_eco_dist_mat_dt[,mean(value),by=ecology_row]
+avg_jaccard_per_ecology_samp = avg_jaccard_per_ecology_samp[order(V1)]
+four_samp_per_eco_dist_mat_list$ecology_row = factor(four_samp_per_eco_dist_mat_list$ecology_row,levels=avg_jaccard_per_ecology_samp$ecology_row)
+library(ggplot2)
+# make beta diversity plot
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/beta_diversity_within_same_ecologies.pdf")
+ggplot(four_samp_per_eco_dist_mat_list,aes(x=ecology_row,y=value)) + geom_boxplot(outlier.shape = NA) + geom_jitter() + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+dev.off()
+
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/average_num_genes_per_ecology.pdf")
+ggplot(mean_orf_num_by_ecology,aes(x=ecology,y=V1)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+dev.off()
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/variance_num_genes_per_ecology.pdf")
+ggplot(variance_orf_num_by_ecology,aes(x=ecology,y=V1)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+dev.off()
+
+four_samp_per_eco_dist_mat_list_dt = as.data.table(four_samp_per_eco_dist_mat_list)
+mean_beta_div = four_samp_per_eco_dist_mat_list_dt[,mean(value),by=ecology_row]
+
+mean_orf_num_by_ecology = as.data.frame(mean_orf_num_by_ecology)
+mean_beta_div = as.data.frame(mean_beta_div)
+mean_orf_num_by_ecology = mean_orf_num_by_ecology[match(mean_beta_div$ecology_row,mean_orf_num_by_ecology$ecology),]
+cor(mean_orf_num_by_ecology$V1,mean_beta_div$V1)
+
+# make heatmap using average of jaccard similarities
+
+ecology_dist_mat_files = list.files(pattern="_cluecology_jaccard_mat.tsv",recursive = TRUE,full.names = TRUE)
+
+eco_dist_mat_list = lapply(ecology_dist_mat_files, function(dist_mat_file) {
+  dist_mat = read.csv(dist_mat_file)
+  rownames(dist_mat) = dist_mat[,1]
+  dist_mat = dist_mat[,-1]
+})
+
+num_rows = nrow(eco_dist_mat_list[[1]])
+num_cols = ncol(eco_dist_mat_list[[1]])
+
+avg_eco_dist_mat = matrix(0,ncol=num_cols,nrow=num_rows)
+for(colNum in 1:num_cols) {
+  for(rowNum in 1:num_rows) {
+    mean_jaccard = mean(sapply(eco_dist_mat_list, function(x) x[rowNum,colNum]))
+    avg_eco_dist_mat[rowNum,colNum] = mean_jaccard
+  }
+}
+rownames(avg_eco_dist_mat) = gsub("-",".",rownames(eco_dist_mat_list[[1]]))
+colnames(avg_eco_dist_mat) = gsub("-",".",rownames(eco_dist_mat_list[[1]]))
+avg_eco_dist_mat = as.data.frame(avg_eco_dist_mat)
+o = rownames(avg_eco_dist_mat)
+hc = hclust(as.dist(avg_eco_dist_mat))
+avg_eco_dist_mat = avg_eco_dist_mat[hc$order, hc$order]
+diag(avg_eco_dist_mat) = NA
+avg_eco_dist_mat = avg_eco_dist_mat[o, o]
+library(pheatmap)
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/eco_similarity_heatmap.pdf")
+pheatmap(avg_eco_dist_mat, cluster_col = hc, cluster_row = hc)
+dev.off()
+
+# get the average jaccard distance between each ecology and other ecologies
+avg_jaccard_df = data.frame()
+for(x in 1:nrow(avg_eco_dist_mat)) {
+  myrow = avg_eco_dist_mat[x,]
+  eco_name = rownames(myrow)
+  mean_jaccard = mean(as.numeric(myrow[-match(eco_name,names(myrow))]))
+  avg_jaccard_df = rbind(avg_jaccard_df,c(eco_name,mean_jaccard))
+}
+avg_jaccard_df = avg_jaccard_df[order(avg_jaccard_df[,2]),]
+```
+
+#Now calculate alpha diversity for gene presence absence
+
+```{bash}
+for x in iteration*_clustered/all_seqs_db_iteration*_clu.tsv
+do
+sbatch -n 1 -t 0-01:00 -p short --mem=15G scripts/calc_chao_diversity.bash ${x} /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv
+done
+
+```
+
+#Now make the plots
+
+```{r}
+library(data.table)
+library(ggplot2)
+# compute beta diversity on each dist matrix
+ecology_dist_mat_files = list.files(pattern="ecology_chao_mat.tsv",recursive = TRUE,full.names = TRUE)
+sample_dist_mat_files = list.files(pattern="sample_chao_mat.tsv",recursive = TRUE,full.names = TRUE)
+
+sample_dist_mat_df = lapply(sample_dist_mat_files, function(x) read.csv(x))
+sample_dist_mat_dt = rbindlist(sample_dist_mat_df)
+sample_dist_mat_dt = sample_dist_mat_dt[,-1]
+# remove duplicated samples
+sample_dist_mat_dt = sample_dist_mat_dt[-which(duplicated(sample_dist_mat_dt$sample)),]
+sample_dist_mat_dt$chao = log2(sample_dist_mat_dt$chao)
+
+avg_chao_per_eco = sample_dist_mat_dt[,mean(chao),by=ecology]
+avg_chao_per_eco = avg_chao_per_eco[order(V1)]
+sample_dist_mat_dt$ecology = factor(sample_dist_mat_dt$ecology,levels=avg_chao_per_eco$ecology)
+pdf("chao_diversity_individual_samples.pdf")
+ggplot(sample_dist_mat_dt, aes(x=ecology,y=chao)) + geom_boxplot(outlier.shape = NA) + geom_jitter() + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+dev.off()
+```
+
+#Also I want to do a permutation test. Where I scramble the ecology labels of the genes and redo the jaccard index.
+
+```{bash}
+
+for x in iteration*_clustered/all_seqs_db_iteration*_clu.tsv
+do
+sbatch -n 1 -t 0-01:00 -p short --mem=15G scripts/calc_distance_matrixes_scrambled.bash ${x} /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv
+done
+
+
+```
+
+#Make plot showing jaccard similiarity
+
+```{r}
+library(data.table)
+metadata_df = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+metadata_df_dt = as.data.table(metadata_df)
+mean_orf_num_by_ecology = metadata_df_dt[,mean(raw_orf_count),by=ecology]
+variance_orf_num_by_ecology = metadata_df_dt[,sd(raw_orf_count),by=ecology]
+
+
+# make heatmap using average of jaccard similarities
+
+ecology_dist_mat_files = list.files(pattern="_cluecology_jaccard_mat_scrambled.csv",recursive = TRUE,full.names = TRUE)
+
+eco_dist_mat_list = lapply(ecology_dist_mat_files, function(dist_mat_file) {
+  dist_mat = read.csv(dist_mat_file)
+  rownames(dist_mat) = dist_mat[,1]
+  dist_mat = dist_mat[,-1]
+})
+
+num_rows = nrow(eco_dist_mat_list[[1]])
+num_cols = ncol(eco_dist_mat_list[[1]])
+
+avg_eco_dist_mat = matrix(0,ncol=num_cols,nrow=num_rows)
+for(colNum in 1:num_cols) {
+  for(rowNum in 1:num_rows) {
+    mean_jaccard = mean(sapply(eco_dist_mat_list, function(x) x[rowNum,colNum]))
+    avg_eco_dist_mat[rowNum,colNum] = mean_jaccard
+  }
+}
+rownames(avg_eco_dist_mat) = gsub("-",".",rownames(eco_dist_mat_list[[1]]))
+colnames(avg_eco_dist_mat) = gsub("-",".",rownames(eco_dist_mat_list[[1]]))
+avg_eco_dist_mat = as.data.frame(avg_eco_dist_mat)
+o = rownames(avg_eco_dist_mat)
+hc = hclust(as.dist(avg_eco_dist_mat))
+avg_eco_dist_mat = avg_eco_dist_mat[hc$order, hc$order]
+diag(avg_eco_dist_mat) = NA
+avg_eco_dist_mat = avg_eco_dist_mat[o, o]
+library(pheatmap)
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/eco_similarity_heatmap_scrambled.pdf")
+pheatmap(avg_eco_dist_mat, cluster_col = hc, cluster_row = hc)
+dev.off()
+
+```
+
+#Now make plot showing average number of unique genes per ecology
+
+```{r}
+library(ggplot2)
+cluster_folders = list.files(pattern="_clustered",full.names=TRUE)
+num_unique_genes_per_ecology = sapply(cluster_folders, function(myfolder) {
+  iteration_file = list.files(myfolder, pattern="_clu_num_singletons_per_ecology_scrambled.tsv",full.names = TRUE)
+})
+
+num_unique_genes_per_ecology_all_iterations_list = lapply(num_unique_genes_per_ecology, function(x) read.table(x,sep="\t",header=TRUE,row.names=1))
+num_unique_genes_per_ecology_all_iterations_list = do.call("cbind",num_unique_genes_per_ecology_all_iterations_list)
+average_num_unique_genes = rowMeans(num_unique_genes_per_ecology_all_iterations_list)
+average_num_unique_genes = as.data.frame(average_num_unique_genes)
+average_num_unique_genes$ecology = rownames(average_num_unique_genes)
+average_num_unique_genes$label = round(average_num_unique_genes[,1])
+average_num_unique_genes$ecology = gsub("-",".",average_num_unique_genes$ecology)
+average_num_unique_genes$ecology = factor(average_num_unique_genes$ecology,levels=rev(c("aquatic.sediment","coral.reef","terrestrial.soil","rhizosphere","gut","mouse","aquatic","cow","glacier.or.permafrost","oral","airways","skin","plants","chicken","moose","nasal","vaginal")))
+pdf("average_num_unique_genes_each_ecology_scrambled.pdf")
+ggplot(average_num_unique_genes,aes(x=ecology,y=average_num_unique_genes)) + geom_bar(stat='identity') + geom_text(aes(label = label), hjust = -0.05) + coord_flip() + theme_classic() + xlab("gene count") + ylab("") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) + ylim(0,500000)
+dev.off()
+```
+
+
+
+
+##Ok Next I want to make the same heatmap using beta diversity but with species abundances. So I will use bracken for this. First step is installation which takes a whil
+
+```{bash}
+
+# /n/scratch3/users/s/sez10/_RESTORE/kraken2_db
+
+sbatch -c 20 -t 7-00:00 -p long --mem=100G /n/scratch3/users/s/sez10/_RESTORE/make_kraken_db.bash /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/kraken2_db 20
+
+```
+
+#Prepare input files
+
+```{r}
+input_data = read.table("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/fig3_4_input_all_IDs.txt",sep="\t",header=FALSE)
+
+## I only want a total of 25 human gut samples. 13 industrialized and 12 non-industrialized
+
+all_human_gut_samples = input_data[input_data[,2] == "human_gut" | input_data[,2] == "human_gut_nonindustry",]
+
+input_data_human_gut_ind = input_data[input_data[,2] == "human_gut",]
+input_data_non_ind = input_data[input_data[,2] == "human_gut_nonindustry",]
+### pick a random 13 and 12 industrialized and non-industrialized respectivelys
+set.seed(1)
+chosen_industrialized = input_data_human_gut_ind[sample(1:nrow(input_data_human_gut_ind),13,replace = FALSE),]
+chosen_nonindustrialized = input_data_non_ind[sample(1:nrow(input_data_non_ind),12,replace = FALSE),]
+
+chosen_human_gut = rbind(chosen_industrialized,chosen_nonindustrialized)
+not_chosen_human_gut = setdiff(all_human_gut_samples[,1],chosen_human_gut[,1])
+## remove the human gut samples I did not choose
+input_data = input_data[-match(not_chosen_human_gut,input_data[,1]),]
+## change the sample type from human_gut_nonindustry to just human_gut
+input_data$V2[input_data$V2 == "human_gut_nonindustry"] = "human_gut"
+# add glacier permafrost samples 
+glacier_samps2 = read.table("filereport_analysis_permafrost_2_PRJEB22516.tsv",sep="\t",header=TRUE)
+glacier_samps2 = gsub(".fasta.gz","",basename(glacier_samps2[,c("submitted_ftp")]))
+glacier_samples=data.frame(V1=sample(glacier_samps2,size=6,replace=FALSE),V2=rep("glacier_permafrost",6))
+input_data = rbind(input_data,glacier_samples)
+# now add some moose samples
+moose_samples = data.frame(V1=c("ERR1278072","ERR1278073","ERR1278074"),V2=rep("moose",3))
+input_data = rbind(input_data,moose_samples)
+
+write.table(input_data,file="all_potential_kraken_input_samples.txt",sep="\t",col.names=FALSE,row.names=FALSE,quote=FALSE)
+```
+
+#Get samples in each iteration
+
+```{bash}
+mkdir tables_with_bootstrap_samples_species_level
+sbatch -c 1 -t 0-01:00 -p short --mem=5G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/get_samples_species_level.bash 4 /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/tables_with_bootstrap_samples_species_level
+
+```
+
+##Now get all the unique runs. we will run kracken on them
+
+```{r}
+iterations = list.files("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/tables_with_bootstrap_samples_species_level",full.names = TRUE,pattern = ".csv")
+iterations_list = lapply(iterations, function(x) read.csv(x))
+iterations_df = do.call("rbind",iterations_list)
+unique_runs = unique(iterations_df)
+unique_runs$human_nonhuman = unique_runs$ecology == "airways" | unique_runs$ecology == "human_gut" | unique_runs$ecology == "human_oral" | unique_runs$ecology == "nasal" | unique_runs$ecology == "skin" | unique_runs$ecology == "vaginal"
+unique_runs$human_nonhuman[unique_runs$human_nonhuman==TRUE] = "human"
+unique_runs$human_nonhuman[unique_runs$human_nonhuman==FALSE] = "nonhuman"
+write.table(unique_runs,file="runs_for_kracken.txt",quote=FALSE,col.names=FALSE,row.names=FALSE,sep="\t")
+
+```
+
+#Get the number of reads for each sample
+
+```{bash}
+mkdir runs_for_kracken_metadata
+while read line
+do
+srr=$(echo ${line} | awk '{print $1}')
+sbatch -c 1 -t 0-00:05 -p short --mem=1G get_srr_metadata.bash ${srr} runs_for_kracken_metadata/${srr}_metadata.csv
+done < runs_for_kracken.txt 
+```
+
+```{r}
+file_metadata = list.files("runs_for_kracken_metadata",full.names = TRUE)
+
+csv_file = lapply(file_metadata, function(x) {
+  if(file.size(x)>0) {
+    mycsv = read.csv(x)
+    mycsv$ERR = gsub("_metadata.csv","",basename(x))
+    return(mycsv)
+  } else {
+    return(NULL)
+  }
+})
+csv_file = do.call("rbind",csv_file)
+
+kracken_data = read.table("runs_for_kracken.txt",header=FALSE,sep="\t")
+metadta_to_get = kracken_data[!kracken_data[,1]%in%csv_file$ERR,]
+write.table(metadta_to_get,sep="\t",col.names=FALSE,row.names=FALSE,quote=FALSE,file="runs_for_kracken_metadata_to_get2.txt")
+```
+
+```{bash}
+while read line
+do
+srr=$(echo ${line} | awk '{print $1}')
+echo "esearch -db sra -query ${srr} | efetch -format runinfo > runs_for_kracken_metadata/${srr}_metadata.csv"
+done < runs_for_kracken_metadata_to_get2.txt 
+
+
+esearch -db sra -query ERR2206775 | efetch -format runinfo > runs_for_kracken_metadata/ERR2206775_metadata.csv
+esearch -db sra -query SRR1706146 | efetch -format runinfo > runs_for_kracken_metadata/SRR1706146_metadata.csv
+esearch -db sra -query SRR10193379 | efetch -format runinfo > runs_for_kracken_metadata/SRR10193379_metadata.csv
+esearch -db sra -query ERR2027902 | efetch -format runinfo > runs_for_kracken_metadata/ERR2027902_metadata.csv
+esearch -db sra -query SRR5195110 | efetch -format runinfo > runs_for_kracken_metadata/SRR5195110_metadata.csv
+esearch -db sra -query SRR6757679 | efetch -format runinfo > runs_for_kracken_metadata/SRR6757679_metadata.csv
+esearch -db sra -query SRR6323527 | efetch -format runinfo > runs_for_kracken_metadata/SRR6323527_metadata.csv
+esearch -db sra -query SRR5891574 | efetch -format runinfo > runs_for_kracken_metadata/SRR5891574_metadata.csv
+esearch -db sra -query SRR6748020 | efetch -format runinfo > runs_for_kracken_metadata/SRR6748020_metadata.csv
+esearch -db sra -query ERR2022389 | efetch -format runinfo > runs_for_kracken_metadata/ERR2022389_metadata.csv
+esearch -db sra -query SRR10258570 | efetch -format runinfo > runs_for_kracken_metadata/SRR10258570_metadata.csv
+esearch -db sra -query SRR1706149 | efetch -format runinfo > runs_for_kracken_metadata/SRR1706149_metadata.csv
+esearch -db sra -query ERR2027904 | efetch -format runinfo > runs_for_kracken_metadata/ERR2027904_metadata.csv
+esearch -db sra -query ERR1989791 | efetch -format runinfo > runs_for_kracken_metadata/ERR1989791_metadata.csv
+esearch -db sra -query ERR2022393 | efetch -format runinfo > runs_for_kracken_metadata/ERR2022393_metadata.csv
+esearch -db sra -query SRR5195127 | efetch -format runinfo > runs_for_kracken_metadata/SRR5195127_metadata.csv
+esearch -db sra -query SRR10258561 | efetch -format runinfo > runs_for_kracken_metadata/SRR10258561_metadata.csv
+esearch -db sra -query SRR6323438 | efetch -format runinfo > runs_for_kracken_metadata/SRR6323438_metadata.csv
+esearch -db sra -query ERR2619763 | efetch -format runinfo > runs_for_kracken_metadata/ERR2619763_metadata.csv
+esearch -db sra -query ERR2022384 | efetch -format runinfo > runs_for_kracken_metadata/ERR2022384_metadata.csv
+esearch -db sra -query SRR5195114 | efetch -format runinfo > runs_for_kracken_metadata/SRR5195114_metadata.csv
+esearch -db sra -query SRR10192916 | efetch -format runinfo > runs_for_kracken_metadata/SRR10192916_metadata.csv
+esearch -db sra -query SRR6747970 | efetch -format runinfo > runs_for_kracken_metadata/SRR6747970_metadata.csv
+esearch -db sra -query ERR1989808 | efetch -format runinfo > runs_for_kracken_metadata/ERR1989808_metadata.csv
+esearch -db sra -query SRR6323545 | efetch -format runinfo > runs_for_kracken_metadata/SRR6323545_metadata.csv
+esearch -db sra -query SRR10191015 | efetch -format runinfo > runs_for_kracken_metadata/SRR10191015_metadata.csv
+esearch -db sra -query ERR1939167 | efetch -format runinfo > runs_for_kracken_metadata/ERR1939167_metadata.csv
+esearch -db sra -query SRR1706185 | efetch -format runinfo > runs_for_kracken_metadata/SRR1706185_metadata.csv
+esearch -db sra -query ERR2789359 | efetch -format runinfo > runs_for_kracken_metadata/ERR2789359_metadata.csv
+esearch -db sra -query ERR2022392 | efetch -format runinfo > runs_for_kracken_metadata/ERR2022392_metadata.csv
+esearch -db sra -query SRR5195117 | efetch -format runinfo > runs_for_kracken_metadata/SRR5195117_metadata.csv
+esearch -db sra -query ERR2206756 | efetch -format runinfo > runs_for_kracken_metadata/ERR2206756_metadata.csv
+esearch -db sra -query SRR10191021 | efetch -format runinfo > runs_for_kracken_metadata/SRR10191021_metadata.csv
+esearch -db sra -query SRR6748226 | efetch -format runinfo > runs_for_kracken_metadata/SRR6748226_metadata.csv
+esearch -db sra -query SRR6323546 | efetch -format runinfo > runs_for_kracken_metadata/SRR6323546_metadata.csv
+esearch -db sra -query ERR1711695 | efetch -format runinfo > runs_for_kracken_metadata/ERR1711695_metadata.csv
+esearch -db sra -query SRR6757608 | efetch -format runinfo > runs_for_kracken_metadata/SRR6757608_metadata.csv
+esearch -db sra -query SRR6757623 | efetch -format runinfo > runs_for_kracken_metadata/SRR6757623_metadata.csv
+esearch -db sra -query SRR10693298 | efetch -format runinfo > runs_for_kracken_metadata/SRR10693298_metadata.csv
+esearch -db sra -query ERR1711598 | efetch -format runinfo > runs_for_kracken_metadata/ERR1711598_metadata.csv
+
+```
+
+```{r}
+file_metadata = list.files("runs_for_kracken_metadata",full.names = TRUE)
+samplenames = gsub("_metadata.csv","",basename(file_metadata))
+csv_file = lapply(file_metadata, function(x) {
+  if(file.size(x)>0) {
+    mycsv = read.csv(x)
+    mycsv$ERR = gsub("_metadata.csv","",basename(x))
+    return(mycsv)
+  } else {
+    return(NULL)
+  }
+})
+csv_file = do.call("rbind",csv_file)
+
+csv_file_filt = csv_file[csv_file$Run%in%samplenames,]
+# get number of PRJ of each run
+bioprojects = unique(csv_file_filt$BioProject)
+write.table(bioprojects,file="PRJs_for_kracken_metadata_to_get.txt",col.names=FALSE,row.names=FALSE,quote=FALSE)
+```
+
+```{bash}
+mkdir runs_for_kracken_PRJ
+while read line
+do
+/home/sez10/kostic_lab/non_human_catalogue/get_metadata_only.bash ${line} runs_for_kracken_PRJ
+done < PRJs_for_kracken_metadata_to_get.txt
+```
+
+
+```{bash}
+
+head -n 1 runs_for_kracken.txt > dl_test.txt
+mkdir kracken_ouptut
+# first download samples. I want to see the length of reads in each sample
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+sbatch -c 5 -t 0-01:00 -p short --mem=3G scripts/download_samples_for_kracken.bash ${line} 5 kracken_ouptut
+done < dl_test.txt
+
+tail -n +2 runs_for_kracken.txt > runs_for_kracken2.txt
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+sbatch -c 5 -t 0-01:00 -p short --mem=3G scripts/download_samples_for_kracken.bash ${line} 5 kracken_ouptut
+done < runs_for_kracken2.txt
+
+
+sbatch -c 20 -t 4-00:00 -p medium --mem=200G scripts/build_bracken_db.bash
+
+# run bracken and kraken now
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 5 -t 0-04:00 -p short --mem=100G scripts/run_kracken_bracken.bash ${sample} ${category} 5 kracken_ouptut /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/kraken2_db /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism tmp
+done < dl_test.txt 
+
+sbatch -c 5 -t 0-04:00 -p short --mem=80G --array=1-406%50 scripts/run_kracken_bracken_array_job.bash runs_for_kracken.txt 5 kracken_ouptut /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/kraken2_db /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism tmp # job ID 63704333
+
+
+sacct --format="JobID%30,JobName,State" -S 2022-10-19 | grep "63704333_" | grep "run_krack" | grep -v "COMPLETED" | awk '{print $1}' | cut -d '_' -f2 | while read line; do sed "${line}q;d" runs_for_kracken.txt; done > runs_for_kracken_redo.txt
+
+sbatch -c 5 -t 0-11:59 -p short --mem=80G --array=1-4%50 scripts/run_kracken_bracken_array_job.bash runs_for_kracken_redo.txt 5 kracken_ouptut /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/kraken2_db /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism tmp # job ID 63887253
+
+```
+
+#Now read in all kracken output
+
+```{r}
+library(data.table)
+iteration_files = list.files("tables_with_bootstrap_samples_species_level",full.names = TRUE)
+kracken_output = list.files("kracken_ouptut/",pattern = "bracken",full.names = TRUE)
+
+kracken_sampleName = gsub(".bracken","",basename(kracken_output))
+kracken_output_df = data.frame(kracken_output,kracken_sampleName)
+# borrowed from https://stackoverflow.com/questions/13273833/merging-multiple-data-tables
+mergeDTs <- function(dt_list, by = NULL, sort = FALSE) {
+  Reduce(
+    function(...) {
+      merge(..., by = by, all = TRUE, sort = sort)
+    }, dt_list)
+}
+
+library(reshape2)
+library(vegan)
+for(iteration_file in iteration_files) {
+  iteration_sampleList = read.csv(iteration_file)
+  kracken_sampleName = gsub(".bracken","",basename(kracken_output))
+  kracken_output_files_cur_iter = kracken_output_df[match(iteration_sampleList[,1],kracken_output_df[,2]),1]
+  
+  kracken_output_list = lapply(kracken_output_files_cur_iter, function(x) {
+    mydt = fread(x,sep="\t",header=TRUE)[,.(name,fraction_total_reads)]
+    colnames(mydt)[2] = gsub(".bracken","",basename(x))
+    return(mydt)
+  })
+  
+  kracken_merged = mergeDTs(kracken_output_list,by="name")
+  kracken_merged = as.data.frame(kracken_merged)
+  rownames(kracken_merged) = kracken_merged[,1]
+  kracken_merged = kracken_merged[,-1]
+  kracken_merged = as.matrix(kracken_merged)
+  kracken_merged_melted = reshape2::melt(kracken_merged)
+  iteration_sampleList_ordered = iteration_sampleList[match(kracken_merged_melted[,2],iteration_sampleList[,1]),]
+  kracken_merged_melted = cbind(kracken_merged_melted,biome=iteration_sampleList_ordered$ecology)
+  kracken_merged_melted$value[is.na(kracken_merged_melted$value)] = 0
+  # to make beta diversity heatmap I have 2 options. average all samples from same ecology together now then calculate distance. Or calculate distance and then average. the ladder will give me a diagnol with beta diversity between samples of the same ecology. lets do both!
+  
+  # first average then create distance matrix
+  kracken_merged_melted_dt = as.data.table(kracken_merged_melted)
+  kracken_merged_melted_dt_avg = kracken_merged_melted_dt[,mean(value),by=.(Var1,biome)]
+  kracken_merged_melted_dt_avg = as.data.frame(kracken_merged_melted_dt_avg)
+  # now convert back to matrix
+  kracken_merged_avg_wide = reshape2::dcast(kracken_merged_melted_dt_avg,biome ~ Var1,value.var="V1")
+  rownames(kracken_merged_avg_wide) = kracken_merged_avg_wide[,1]
+  kracken_merged_avg_wide = kracken_merged_avg_wide[,-1]
+  dist_mat = vegdist(kracken_merged_avg_wide, method="bray")
+  dist_mat= as.matrix(dist_mat)
+  write.csv(dist_mat,file=gsub(".csv","ecology_bray_mat.tsv",iteration_file))
+  # now make the jaccard matrix where I calculate distance first and average second
+  kracken_merged[is.na(kracken_merged)] = 0
+  sample_distances = vegdist(t(kracken_merged),method="bray")
+  sample_distances = as.matrix(sample_distances)
+  # now melt
+  sample_distances_melt = reshape2::melt(sample_distances)
+  sample_distances_melt = cbind(sample_distances_melt,biomeVar1=iteration_sampleList[match(sample_distances_melt[,1],iteration_sampleList[,1]),2])
+  sample_distances_melt = cbind(sample_distances_melt,biomeVar2=iteration_sampleList[match(sample_distances_melt[,2],iteration_sampleList[,1]),2])
+  # remove guys where Var1 and Var2 are the same
+  sample_distances_melt = sample_distances_melt[sample_distances_melt$Var1 != sample_distances_melt$Var2,]
+  # now average
+  sample_distances_melt_dt = as.data.table(sample_distances_melt)
+  ssample_distances_melt_dt_avg = sample_distances_melt_dt[,mean(value),by=.(biomeVar1,biomeVar2)]
+  # now widen
+  ssample_distances_melt_dt_avg_wide = reshape2::dcast(ssample_distances_melt_dt_avg,biomeVar1 ~ biomeVar2,value.var="V1")
+  write.csv(ssample_distances_melt_dt_avg_wide,file=gsub(".csv","sample_bray_mat_eco_avg.tsv",iteration_file))
+}
+
+```
+
+#Now make heatmap. first make heatmap using ecology distance matrixes
+
+```{r}
+ecology_dist_mat_files = list.files("tables_with_bootstrap_samples_species_level",pattern="ecology_bray_mat.tsv",recursive = TRUE,full.names = TRUE)
+
+eco_dist_mat_list = lapply(ecology_dist_mat_files, function(dist_mat_file) {
+  dist_mat = read.csv(dist_mat_file)
+  rownames(dist_mat) = dist_mat[,1]
+  dist_mat = dist_mat[,-1]
+})
+
+num_rows = nrow(eco_dist_mat_list[[1]])
+num_cols = ncol(eco_dist_mat_list[[1]])
+
+avg_eco_dist_mat = matrix(0,ncol=num_cols,nrow=num_rows)
+for(colNum in 1:num_cols) {
+  for(rowNum in 1:num_rows) {
+    mean_dist = mean(sapply(eco_dist_mat_list, function(x) x[rowNum,colNum]))
+    avg_eco_dist_mat[rowNum,colNum] = mean_dist
+  }
+}
+rownames(avg_eco_dist_mat) = rownames(eco_dist_mat_list[[1]])
+colnames(avg_eco_dist_mat) = colnames(eco_dist_mat_list[[1]])
+avg_eco_dist_mat = as.data.frame(avg_eco_dist_mat)
+o = rownames(avg_eco_dist_mat)
+hc = hclust(as.dist(avg_eco_dist_mat))
+avg_eco_dist_mat = avg_eco_dist_mat[hc$order, hc$order]
+diag(avg_eco_dist_mat) = NA
+avg_eco_dist_mat = avg_eco_dist_mat[o, o]
+library(pheatmap)
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/eco_similarity_heatmap_species_level.pdf")
+pheatmap(avg_eco_dist_mat, cluster_col = hc, cluster_row = hc)
+dev.off()
+
+
+## also create heatmap using the samples distances averaged
+samle_dist_mat_files = list.files("tables_with_bootstrap_samples_species_level",pattern="sample_bray_mat_eco_avg.tsv",recursive = TRUE,full.names = TRUE)
+
+sample_dist_mat_list = lapply(samle_dist_mat_files, function(dist_mat_file) {
+  dist_mat = read.csv(dist_mat_file)
+  rownames(dist_mat) = dist_mat[,2]
+  dist_mat = dist_mat[,-c(1,2)]
+})
+
+num_rows = nrow(sample_dist_mat_list[[1]])
+num_cols = ncol(sample_dist_mat_list[[1]])
+
+avg_sample_dist_mat = matrix(0,ncol=num_cols,nrow=num_rows)
+for(colNum in 1:num_cols) {
+  for(rowNum in 1:num_rows) {
+    mean_dist = mean(sapply(sample_dist_mat_list, function(x) x[rowNum,colNum]))
+    avg_sample_dist_mat[rowNum,colNum] = mean_dist
+  }
+}
+
+rownames(avg_sample_dist_mat) = rownames(sample_dist_mat_list[[1]])
+colnames(avg_sample_dist_mat) = colnames(sample_dist_mat_list[[1]])
+avg_sample_dist_mat = as.data.frame(avg_sample_dist_mat)
+library(pheatmap)
+
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/sample_similarity_heatmap_species_level.pdf")
+pheatmap(avg_sample_dist_mat, cluster_col = TRUE, cluster_row = TRUE)
+dev.off()
+```
+
+##Compute beta diversity between samples from the same ecology
+
+```{r}
+library(data.table)
+iteration_files = list.files("tables_with_bootstrap_samples_species_level",full.names = TRUE,pattern=".csv")
+kracken_output = list.files("kracken_ouptut/",pattern = "bracken",full.names = TRUE)
+
+kracken_sampleName = gsub(".bracken","",basename(kracken_output))
+kracken_output_df = data.frame(kracken_output,kracken_sampleName)
+# borrowed from https://stackoverflow.com/questions/13273833/merging-multiple-data-tables
+mergeDTs <- function(dt_list, by = NULL, sort = FALSE) {
+  Reduce(
+    function(...) {
+      merge(..., by = by, all = TRUE, sort = sort)
+    }, dt_list)
+}
+
+library(reshape2)
+library(vegan)
+beta_div_list = lapply(iteration_files, function(iteration_file) {
+  print(iteration_file)
+  iteration_sampleList = read.csv(iteration_file)
+  kracken_sampleName = gsub(".bracken","",basename(kracken_output))
+  kracken_output_files_cur_iter = kracken_output_df[match(iteration_sampleList[,1],kracken_output_df[,2]),1]
+  
+  kracken_output_list = lapply(kracken_output_files_cur_iter, function(x) {
+    mydt = fread(x,sep="\t",header=TRUE)[,.(name,fraction_total_reads)]
+    colnames(mydt)[2] = gsub(".bracken","",basename(x))
+    return(mydt)
+  })
+  
+  kracken_merged = mergeDTs(kracken_output_list,by="name")
+  kracken_merged = as.data.frame(kracken_merged)
+  rownames(kracken_merged) = kracken_merged[,1]
+  kracken_merged = kracken_merged[,-1]
+  kracken_merged = as.matrix(kracken_merged)
+  kracken_merged[is.na(kracken_merged)] = 0
+  kracken_merged = t(kracken_merged)
+  dist_mat = as.matrix(vegdist(kracken_merged,method="bray"))
+  
+  kracken_merged_melted = reshape2::melt(dist_mat)
+  kracken_merged_melted$Var1biome = iteration_sampleList[match(kracken_merged_melted[,1],iteration_sampleList[,1]),2]
+  kracken_merged_melted$Var2biome = iteration_sampleList[match(kracken_merged_melted[,2],iteration_sampleList[,1]),2]
+  # now removw places where Var1 and Var2 are equal
+  kracken_merged_melted = kracken_merged_melted[kracken_merged_melted$Var1 != kracken_merged_melted$Var2,]
+  # only keep ones where the biome are the same
+  kracken_merged_melted = kracken_merged_melted[kracken_merged_melted$Var1biome == kracken_merged_melted$Var2biome,]
+  return(kracken_merged_melted)
+})
+beta_div_list_df = do.call("rbind",beta_div_list)
+# remove duplicates
+beta_div_list_df = beta_div_list_df[-which(duplicated(beta_div_list_df[,c(1,2)])),]
+library(ggplot2)
+
+# calculate mean beta
+beta_div_list_dt = as.data.table(beta_div_list_df)
+mean_betas = beta_div_list_dt[,mean(value),by=Var1biome]
+mean_betas = mean_betas[order(V1)]
+
+beta_div_list_df$Var1biome = factor(beta_div_list_df$Var1biome,levels=mean_betas$Var1biome)
+
+pdf("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/species_level_within_ecology_beta_diversity.pdf")
+ggplot(beta_div_list_df,aes(x=Var1biome,y=value)) + geom_boxplot(outlier.shape = NA) + geom_jitter() + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+dev.off()
+```
+
+#Now calculate alpha diversity for species
+
+```{r}
+library(data.table)
+library(fossil)
+iteration_files = list.files("tables_with_bootstrap_samples_species_level",full.names = TRUE,pattern=".csv")
+kracken_output = list.files("kracken_ouptut/",pattern = "bracken",full.names = TRUE)
+
+kracken_sampleName = gsub(".bracken","",basename(kracken_output))
+kracken_output_df = data.frame(kracken_output,kracken_sampleName)
+# borrowed from https://stackoverflow.com/questions/13273833/merging-multiple-data-tables
+mergeDTs <- function(dt_list, by = NULL, sort = FALSE) {
+  Reduce(
+    function(...) {
+      merge(..., by = by, all = TRUE, sort = sort)
+    }, dt_list)
+}
+
+metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+library(reshape2)
+library(vegan)
+alpha_div_list = lapply(iteration_files, function(iteration_file) {
+  print(iteration_file)
+  iteration_sampleList = read.csv(iteration_file)
+  kracken_sampleName = gsub(".bracken","",basename(kracken_output))
+  kracken_output_files_cur_iter = kracken_output_df[match(iteration_sampleList[,1],kracken_output_df[,2]),1]
+  
+  kracken_output_list = lapply(kracken_output_files_cur_iter, function(x) {
+    mydt = fread(x,sep="\t",header=TRUE)[,.(name,fraction_total_reads)]
+    colnames(mydt)[2] = gsub(".bracken","",basename(x))
+    return(mydt)
+  })
+  
+  kracken_merged = mergeDTs(kracken_output_list,by="name")
+  kracken_merged = as.data.frame(kracken_merged)
+  rownames(kracken_merged) = kracken_merged[,1]
+  kracken_merged = kracken_merged[,-1]
+  kracken_merged = as.matrix(kracken_merged)
+  kracken_merged[is.na(kracken_merged)] = 0
+  kracken_merged = t(kracken_merged)
+  chao_diversity= apply(kracken_merged, 1 , function(x) fossil::chao1(x))
+  sample_ecology = iteration_sampleList[match(names(chao_diversity),iteration_sampleList$sample),"ecology"]
+  mydf = data.frame(sample=names(chao_diversity),ecology=sample_ecology,chao=chao_diversity)
+  return(mydf)
+})
+library(data.table)
+alpha_div_dt = rbindlist(alpha_div_list)
+# remove duplicates
+alpha_div_dt = alpha_div_dt[-which(duplicated(alpha_div_dt$sample)),]
+# order correctly for plot
+mean_alphas = alpha_div_dt[,mean(chao),by=ecology]
+mean_alphas = mean_alphas[order(V1)]
+alpha_div_dt$ecology = factor(alpha_div_dt$ecology,levels=mean_alphas$ecology)
+alpha_div_dt$chao = log2(alpha_div_dt$chao)
+library(ggplot2)
+pdf("chao_species_level_diversity.pdf")
+ggplot(alpha_div_dt, aes(x=ecology,y=chao)) + geom_boxplot(outlier.shape = NA) + geom_jitter() + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+dev.off()
+
+```
+
+##Last thing I want to do is to redo the gene level analysis but with the validation set
+
+#First make a diamond dataset
+```{bash}
+
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap
+
+#!/bin/bash
+
+source activate /home/sez10/miniconda3/envs/meta_assemblers
+
+in_fasta=${1}
+db_name=${2}
+diamond makedb --in ${in_fasta} -d ${db_name}
+
+sbatch -n 1 -t 0-11:59 -p short --mem=30G scripts/make_diamond_db.bash all_seqs_rep_30_collapsed_cluster.fasta.gz all_seqs_rep_30_collapsed_cluster.fasta_db
+
+
+sbatch -n 1 -t 0-11:59 -p short --mem=30G scripts/decompress_gz.bash all_seqs_rep_30_collapsed_cluster.fasta.gz
+
+
+```
+
+#Next compute abundance
+
+```{bash}
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap
+
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 5 -t 0-11:00 -p short --mem=40G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/align_OV2.bash ${sample} ${category} /tmp /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism /tmp/tmp 5 all_seqs_rep_30_collapsed_cluster.fasta_db all_seqs_rep_30_collapsed_cluster.fasta validation_set_gene_abundances
+done < runs_for_kracken.txt 
+
+
+```
+
+#Jobs failed because space issues. Redo
+
+```{r}
+files = list.files("validation_set_gene_abundances",pattern=".tsv")
+samples = gsub("_alignment_data.tsv","",files)
+
+data = read.table("runs_for_kracken.txt",sep="\t",header=FALSE)
+samples_to_redo = data[!data$V1%in%samples,]
+write.table(samples_to_redo,file="validation_gene_abundance_samples_redo.txt",col.names=FALSE,row.names=FALSE,sep="\t",quote=FALSE)
+```
+
+```{bash}
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 10 -t 0-11:00 -p short --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/align_OV2.bash ${sample} ${category} /tmp /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism /tmp/tmp 5 all_seqs_rep_30_collapsed_cluster.fasta_db all_seqs_rep_30_collapsed_cluster.fasta validation_set_gene_abundances
+done < validation_gene_abundance_samples_redo.txt 
+
+```
+
+#Jobs failed because they timed out
+
+```{r}
+files = list.files("validation_set_gene_abundances",pattern=".tsv")
+samples = gsub("_alignment_data.tsv","",files)
+
+data = read.table("runs_for_kracken.txt",sep="\t",header=FALSE)
+samples_to_redo = data[!data$V1%in%samples,]
+write.table(samples_to_redo,file="validation_gene_abundance_samples_redo_v2.txt",col.names=FALSE,row.names=FALSE,sep="\t",quote=FALSE)
+```
+
+```{bash}
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 10 -t 1-00:00 -p medium --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/align_OV2.bash ${sample} ${category} /tmp /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism /tmp/tmp 5 all_seqs_rep_30_collapsed_cluster.fasta_db all_seqs_rep_30_collapsed_cluster.fasta validation_set_gene_abundances
+done < validation_gene_abundance_samples_redo_v2.txt 
+
+```
+
+```{r}
+files = list.files("validation_set_gene_abundances",pattern=".tsv")
+samples = gsub("_alignment_data.tsv","",files)
+
+data = read.table("runs_for_kracken.txt",sep="\t",header=FALSE)
+samples_to_redo = data[!data$V1%in%samples,]
+write.table(samples_to_redo,file="validation_gene_abundance_samples_redo_v3.txt",col.names=FALSE,row.names=FALSE,sep="\t",quote=FALSE)
+```
+
+```{bash}
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 10 -t 2-00:00 -p medium --mem=30G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/align_OV2.bash ${sample} ${category} /tmp /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism /tmp/tmp 5 all_seqs_rep_30_collapsed_cluster.fasta_db all_seqs_rep_30_collapsed_cluster.fasta validation_set_gene_abundances
+done < validation_gene_abundance_samples_redo_v3.txt 
+
+```
+
+```{r}
+files = list.files("validation_set_gene_abundances",pattern=".tsv")
+samples = gsub("_alignment_data.tsv","",files)
+
+data = read.table("runs_for_kracken.txt",sep="\t",header=FALSE)
+samples_to_redo = data[!data$V1%in%samples,]
+write.table(samples_to_redo,file="validation_gene_abundance_samples_redo_v4.txt",col.names=FALSE,row.names=FALSE,sep="\t",quote=FALSE)
+
+```
+
+
+#50 left that timed out.
+
+```{bash}
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 20 -t 4-00:00 -p medium --mem=50G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/align_OV2.bash ${sample} ${category} /tmp /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism /tmp/tmp 5 all_seqs_rep_30_collapsed_cluster.fasta_db all_seqs_rep_30_collapsed_cluster.fasta validation_set_gene_abundances
+done < validation_gene_abundance_samples_redo_v4.txt 
+
+```
+
+
+
+##Forgot to downsample so lets do that. 
+
+
+#First download samples so we know how much to downsample
+```{bash}
+mkdir kracken_fastq_files
+while read line
+do
+sample=$(echo $line | awk '{print $1}')
+category=$(echo $line | awk '{print $3}')
+sbatch -c 5 -t 0-11:00 -p short --mem=40G /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/scripts/download_OV2.bash ${sample} ${category} kracken_fastq_files /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/adapters.fa /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.bitmask /n/data1/joslin/icrb/kostic/szimmerman/files_for_gene_catalogue/GRCh38/GRCh38.primary_assembly.genome.srprism kracken_fastq_files/tmp 5 all_seqs_rep_30_collapsed_cluster.fasta_db all_seqs_rep_30_collapsed_cluster.fasta validation_set_gene_abundances
+done < runs_for_kracken.txt 
+
+# get number of reads in each file
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/redone_ecology_comparison_heatmap/kracken_fastq_files
+
+ls */*.fastq > fastq_file_list.txt
+split -l 20 fastq_file_list.txt fastq_file_list_
+for x in fastq_file_list_*
+do
+sbatch -c 1 -t 0-01:00 -p short --mem=5G get_num_reads.bash ${x} ${x}.output.txt
+done
+
+# 2 timed out
+#SRR10192915/SRR10192915_1.trimmed.fastq 161,199,163
+#SRR10192915/SRR10192915_2.trimmed.fastq 161,199,163
+
+# add those numbers to fastq_file_list_at.output.txt
+cat fastq_file_list_*.output.txt > fastq_file_list_output.txt
+```
+
+# get smallest number
+
+```{r}
+mydf = read.table("fastq_file_list_output.txt",header=FALSE)
+mydf = mydf[,1]
+min(mydf) # 45282
+```
+

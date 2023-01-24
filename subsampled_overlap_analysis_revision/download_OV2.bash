@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+source activate /home/sez10/miniconda3/envs/meta_assemblers
+
+dirname=${1}
+category=${2}
+output_folder=${3}
+adapters_reference=${4}
+bitmask_file=${5}
+sprism_file=${6}
+temp_dir=${7}
+thread_number=${8}
+database=${9}
+database_fastq=${10}
+final_output_dir=${11}
+mkdir -p ${output_folder}/${dirname}
+export OMP_NUM_THREADS=${thread_number}
+
+module load sratoolkit/2.10.7
+
+prefetch --max-size 200G -O ${output_folder}/${dirname} $dirname
+fasterq-dump -O ${output_folder}/${dirname} --threads ${thread_number} ${output_folder}/${dirname}/${dirname}.sra
+
+rm ${output_folder}/${dirname}/${dirname}.sra
+if [ -f "${output_folder}/${dirname}/${dirname}.sra.prf" ]; then
+    rm ${output_folder}/${dirname}/${dirname}.sra.prf
+fi
+if [ -f "${output_folder}/${dirname}/${dirname}.sra.tmp" ]; then
+    rm ${output_folder}/${dirname}/${dirname}.sra.tmp
+fi
+
+f1=${output_folder}/${dirname}/${dirname}.sra_1.fastq
+f2=${output_folder}/${dirname}/${dirname}.sra_2.fastq
+
+# remove adapters
+bbduk.sh -Xmx8g in1=${f1} in2=${f2} out1=${output_folder}/${dirname}/${dirname}_1.trimmed.fastq out2=${output_folder}/${dirname}/${dirname}_2.trimmed.fastq ref=${adapters_reference} threads=${thread_number} qin=33 ktrim=r k=23 mink=11 hdist=1 tpe tbo
+
+rm ${f1}
+rm ${f2}
+
+f1=${output_folder}/${dirname}/${dirname}_1.trimmed.fastq
+f2=${output_folder}/${dirname}/${dirname}_2.trimmed.fastq
+
+if [[ $category == "human" ]]
+then
+mkdir -p ${temp_dir}
+bmtagger.sh -b ${bitmask_file} -x ${sprism_file} -T ${temp_dir} -q1 -1 ${f1} -2 ${f2} -o ${output_folder}/${dirname}/${dirname}_human_free -X
+rm ${f1}
+rm ${f2}
+f1=${output_folder}/${dirname}/${dirname}_human_free_1.fastq
+f2=${output_folder}/${dirname}/${dirname}_human_free_2.fastq
+fi
+

@@ -134,9 +134,11 @@ gtdb_prevalence/scripts/get_pan_gene_prev.bash is used in gtdbtk_prevalence.Rmd 
 
 gtdb_prevalence/scripts/make_gtdbtk_prevalence_plots.Rmd visualizes the prevalence of each GTDB gene in our gene catalogue and each GTDB gene in each ecology.
 
-### Get circular phylogency plots (F6/7)
+### Get circular phylogeny plots (F6/7)
 
 The python script is used to build the phylogenetic tree in the circular phylogeny plot. The R script is used to generate the plots themselves (and must be run both before and after the python script). Data used to generate plots are in the circ_plot_data.zip file on the Figshare resource.
+
+The latest scripts to make circular phylogeny plots can be found in circular_phylogenies_revision
 
 #### Count number of genes in each sample
 
@@ -147,3 +149,18 @@ number_consensus_genes_per_sample/scripts/get_number_genes_per_sample_clean.Rmd 
 get_number_genes_per_sample_clean.Rmd uses count_gene_number_OV2.bash which clusters the human specific genes at 30% identity. 
 
 get_number_genes_per_sample_clean.Rmd also uses count_gene_number_nonhuman_OV2.bash which gets the sequences of each gene in non human samples and then clusters them at 30% identity.
+
+### Annotate every raw open reading frame in every sample using LCA algorithm
+
+annotate_raw_orfs/annotate_raw_orfs.Rmd is the master file used to run all code.
+
+annotate_raw_orfs/run_CAT contains scripts that use the CAT software to run the LCA algorithm on each ORF.
+
+annotate_raw_orfs/run_DIAMOND_with_CAT_postprocessing contains scripts that use the DIAMOND to align ORFs to the NR database and then uses the CAT post-processing scripts. 
+
+The only difference between scripts in run_DIAMOND_with_CAT_postprocessing and run_CAT is that run_CAT also annotates contigs but we don't use that information anyway.
+
+### Calculate the heatmap showing distance between each ecology
+
+subsampled_overlap_analysis_revision has all scripts to calculate heatmap in Figure 2 as well as the alpha and beta diversities at the species and gene level. Also, unique cow gene figures are also in this folder.
+

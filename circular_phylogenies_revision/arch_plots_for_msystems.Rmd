@@ -1,0 +1,918 @@
+---
+title: "make_arch_plots"
+author: "Sam Zimmerman"
+date: "2022-10-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Make arch plot of all environments
+
+```{r}
+# first thing to do is get the frequency of each species level annotation in each 
+
+setwd("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/arch_plots_v2")
+filesA = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/CAT_output/",pattern=".ORF2LCA_named.txt",recursive = TRUE,full.names = TRUE)
+filesB = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/diamond_output/",pattern="_tax_names_annotated.txt",full.names = TRUE)
+all_annotation_files = c(filesA,filesB)
+
+#gene_mappings_files = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/n",pattern=".gene.mapping.txt",recursive = TRUE,full.names = TRUE)
+#gene_mapping_sampleNames = sapply(strsplit(gene_mappings_files,split="/"), function(x) x[length(x)-1])
+#gene_mapping_sampleNames = gsub("_prokka_out","",gene_mapping_sampleNames)
+#gene_mapping_files_df = data.frame(gene_mapping_sampleNames,gene_mappings_files)
+
+sample_metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+
+library(data.table)
+library(parallel)
+gene_numbers_each_sample = mclapply(all_annotation_files, function(x)  {
+  annotation_df_temp = fread(x,sep="\t",header=TRUE,fill=TRUE)
+  total_num_genes = nrow(annotation_df_temp)
+  # only keep species level annotations
+  annotation_df_temp = annotation_df_temp[species != "no support" & !is.na(species) & species!=""]
+  # remove uncultured bacterium
+  annotation_df_temp = annotation_df_temp[species != "uncultured bacterium"]
+  # species IDs
+  #speciesIDs = strsplit(annotation_df_temp$lineage,split=";")
+  #speciesIDs = sapply(speciesIDs, function(x) x[length(x)])
+  #species_annotations = annotation_df_temp$species
+  # remove stars
+  annotation_df_temp$species = gsub("*","",annotation_df_temp$species,fixed=TRUE)
+  #annotation_df_temp$speciesIDs = speciesIDs
+  
+  annotation_df_temp_summary = annotation_df_temp[,.N,by=.(phylum,species)]
+  
+  #num_species = table(species_annotations)
+  # now load in the mapping file
+  sampleBasename = basename(x)
+  sampleName = gsub("_prokka_out.ORF2LCA_named.txt","",sampleBasename)
+  sampleName = gsub("_tax_names_annotated.txt","",sampleName)
+  if(sampleName%in%sample_metadata$prokka_id) {
+    sampleName = sample_metadata[match(sampleName,sample_metadata$prokka_id),"sample"]
+  }
+  # match sample name to biome
+  biome = sample_metadata[match(sampleName,sample_metadata$sample),"ecology",]
+  annotation_df_temp_summary$biome = biome
+  # create vector where I have the biome and number of genes
+  num_genes_in_samp_df = c(biome,total_num_genes)
+  
+  return(list(annotation_df_temp_summary,num_genes_in_samp_df))
+},mc.cores=5)
+
+gene_num_each_sample_list = lapply(gene_numbers_each_sample, function(x) x[[2]])
+gene_num_each_sample_list = do.call("rbind",gene_num_each_sample_list)
+gene_num_each_sample_list = as.data.frame(gene_num_each_sample_list)
+gene_num_each_sample_list[,2] = as.numeric(gene_num_each_sample_list[,2])
+
+annotation_list = lapply(gene_numbers_each_sample, function(x) x[[1]])
+gene_numbers_each_sample_dt = rbindlist(annotation_list)
+
+saveRDS(gene_numbers_each_sample_dt,"gene_numbers_each_sample_dt.rds")
+saveRDS(gene_num_each_sample_list,"gene_num_each_sample_list.rds")
+
+# now only use species that are in any of the gut environments and any of the environmental environments
+
+species_in_gut_and_env = gene_numbers_each_sample_dt[,.(inEnv=sum(unique(biome)%in%c("aquatic","aquatic-sediment","terrestrial-soil","glacier-or-permafrost")),inGut=sum(unique(biome)%in%c("gut","mouse","cow","chicken"))),by=.(species)]
+species_in_gut_and_env = species_in_gut_and_env[inEnv>0 & inGut>0,"species"]
+species_in_gut_and_env = species_in_gut_and_env$species
+gene_numbers_each_sample_gut_env_specific = gene_numbers_each_sample_dt[species%in%species_in_gut_and_env]
+# oh also only keep gut and environment biomes
+gut_env_biomes = c("aquatic","aquatic-sediment","terrestrial-soil","glacier-or-permafrost","gut","mouse","cow","chicken")
+gene_numbers_each_sample_gut_env_specific = gene_numbers_each_sample_gut_env_specific[biome%in%gut_env_biomes]
+# now combine results
+gene_numbers_each_sample_gut_env_specific_total = gene_numbers_each_sample_gut_env_specific[,sum(N),by=.(phylum,species,biome)]
+# get top 250 species only
+# first for each count divide by the total number of genes found in a biome to normalize for total number of genes in biome
+gene_num_each_sample_list_dt = as.data.table(gene_num_each_sample_list)
+total_genes_per_biome = gene_num_each_sample_list_dt[,sum(V2),by=V1]
+colnames(total_genes_per_biome) = c("biome","geneNumber")
+total_genes_per_biome = as.data.frame(total_genes_per_biome)
+total_genes_per_biome_ordered = total_genes_per_biome[match(gene_numbers_each_sample_gut_env_specific_total$biome,total_genes_per_biome$biome),]
+gene_numbers_each_sample_gut_env_specific_total$geneNum_norm = gene_numbers_each_sample_gut_env_specific_total$V1/total_genes_per_biome_ordered[,2]
+
+top_species = gene_numbers_each_sample_gut_env_specific_total[,sum(geneNum_norm),by=species]
+top_species = top_species[order(V1,decreasing = TRUE)][1:250]
+top_species = top_species$species
+gene_numbers_each_sample_gut_env_specific_total = gene_numbers_each_sample_gut_env_specific_total[species%in%top_species]
+
+write.table(gene_numbers_each_sample_gut_env_specific_total,file="gut_env_taxa_counts.txt",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+
+
+# also do a version where the genes don't have to be shared between gut and environment
+
+species_in_gut_or_env = gene_numbers_each_sample_dt[,.(inEnv=sum(unique(biome)%in%c("aquatic","aquatic-sediment","terrestrial-soil","glacier-or-permafrost")),inGut=sum(unique(biome)%in%c("gut","mouse","cow","chicken"))),by=.(species)]
+species_in_gut_or_env = species_in_gut_or_env[inEnv>0 | inGut>0,"species"]
+species_in_gut_or_env = species_in_gut_or_env$species
+gene_numbers_each_sample_gut_or_env_specific = gene_numbers_each_sample_dt[species%in%species_in_gut_or_env]
+# oh also only keep gut and environment biomes
+gut_env_biomes = c("aquatic","aquatic-sediment","terrestrial-soil","glacier-or-permafrost","gut","mouse","cow","chicken")
+gene_numbers_each_sample_gut_or_env_specific = gene_numbers_each_sample_gut_or_env_specific[biome%in%gut_env_biomes]
+# now combine results
+gene_numbers_each_sample_gut_or_env_specific_total = gene_numbers_each_sample_gut_or_env_specific[,sum(N),by=.(phylum,species,biome)]
+# for each count divide by the total number of genes found in a biome to normalize for total number of genes in biome
+gene_num_each_sample_list_dt = as.data.table(gene_num_each_sample_list)
+total_genes_per_biome = gene_num_each_sample_list_dt[,sum(V2),by=V1]
+colnames(total_genes_per_biome) = c("biome","geneNumber")
+total_genes_per_biome = as.data.frame(total_genes_per_biome)
+
+total_genes_per_biome_ordered_gut_or_env = total_genes_per_biome[match(gene_numbers_each_sample_gut_or_env_specific_total$biome,total_genes_per_biome$biome),]
+gene_numbers_each_sample_gut_or_env_specific_total$geneNum_norm = gene_numbers_each_sample_gut_or_env_specific_total$V1/total_genes_per_biome_ordered_gut_or_env[,2]
+
+# get top 250 species only
+top_species_gut_or_env = gene_numbers_each_sample_gut_or_env_specific_total[,sum(geneNum_norm),by=species]
+top_species_gut_or_env = top_species_gut_or_env[order(V1,decreasing = TRUE)][1:250]
+top_species_gut_or_env = top_species_gut_or_env$species
+gene_numbers_each_sample_gut_or_env_specific_total = gene_numbers_each_sample_gut_or_env_specific_total[species%in%top_species_gut_or_env]
+# for each count divide by the total number of genes found in a biome to normalize for total number of genes in biome
+
+write.table(gene_numbers_each_sample_gut_or_env_specific_total,file="gut_or_env_taxa_counts.txt",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+
+```
+
+```{python}
+import pandas as pd
+import os
+from ete3 import NCBITaxa
+ncbi = NCBITaxa()
+#ncbi.update_taxonomy_database()
+gut_env_counts = pd.read_csv("gut_env_taxa_counts.txt",sep="\t")
+
+species_names = set(gut_env_counts["species"].tolist())
+species_names = list(species_names)
+
+name2taxid = ncbi.get_name_translator(species_names)
+
+# look to see if we missed any
+for x in species_names:
+  if(x not in name2taxid.keys()):
+    print(x)
+# Clostridiales Family XIII bacterium WCA-MUC-591-APC-4B and Clostridiales Family XIII bacterium BX16 were not found. lets manually look those up
+#name2taxid['Clostridiales Family XIII bacterium WCA-MUC-591-APC-4B'] = [2606708]
+#name2taxid['Clostridiales Family XIII bacterium BX16'] = [2764712]
+name2taxid['Acidobacteriia bacterium AA117'] = [2169412]
+name2taxid['Lachnospiraceae bacterium WCA-9-b2'] = [2681861]
+
+taxIDs = [x[0] for x in list(name2taxid.values())]
+
+tree = ncbi.get_topology(taxIDs)
+len(tree.get_leaves()) # all 250 leaves are there. perfect
+tree.write(format=1, outfile="ncbi_tree_gut_env.nw")
+# also write the species to ID mapping. I have a feeling I will need that
+species_taxa_to_ID_map = pd.DataFrame({"taxa":list(name2taxid.keys()),"IDs":taxIDs})
+species_taxa_to_ID_map.to_csv("species_taxa_to_ID_map.csv",index=False)
+
+
+
+
+import pandas as pd
+import os
+from ete3 import NCBITaxa
+ncbi = NCBITaxa()
+
+gut_or_env_counts = pd.read_csv("gut_or_env_taxa_counts.txt",sep="\t")
+
+species_names_gut_or_env = set(gut_or_env_counts["species"].tolist())
+species_names_gut_or_env = list(species_names_gut_or_env)
+
+name2taxid_gut_or_env = ncbi.get_name_translator(species_names_gut_or_env)
+
+# look to see if we missed any
+for x in species_names_gut_or_env:
+  if(x not in name2taxid_gut_or_env.keys()):
+    print(x)
+# Clostridiales Family XIII bacterium WCA-MUC-591-APC-4B and Clostridiales Family XIII bacterium BX16 were not found. lets manually look those up
+#name2taxid_gut_or_env['Clostridiales Family XIII bacterium WCA-MUC-591-APC-4B'] = [2606708]
+#name2taxid_gut_or_env['Clostridiales Family XIII bacterium BX16'] = [2764712]
+name2taxid_gut_or_env['Acidobacteriia bacterium AA117'] = [2169412]
+name2taxid_gut_or_env['Lachnospiraceae bacterium WCA-9-b2'] = [2681861]
+
+taxIDs_gut_or_env = [x[0] for x in list(name2taxid_gut_or_env.values())]
+
+tree_gut_or_env = ncbi.get_topology(taxIDs_gut_or_env)
+len(tree_gut_or_env.get_leaves()) # all 250 leaves are there. perfect
+tree_gut_or_env.write(format=1, outfile="ncbi_tree_gut_or_env.nw")
+# also write the species to ID mapping. I have a feeling I will need that
+species_taxa_to_ID_map_gut_or_env = pd.DataFrame({"taxa":list(name2taxid_gut_or_env.keys()),"IDs":taxIDs_gut_or_env})
+species_taxa_to_ID_map_gut_or_env.to_csv("species_taxa_to_ID_map_gut_or_env.csv",index=False)
+
+```
+
+```{r}
+library(phytools)
+library(phylobase)
+library(reshape2)
+library(dplyr)
+library(ggtree)
+library(ggplot2)
+#species_taxa_to_ID_map.csv
+#gut_env_taxa_counts.txt
+#ncbi_tree_gut_env.nw
+# ring_order and ring_names must have same length and correspond to each other. For example if 
+# ring_order is c("gut","mouse","chicken","cow","terrestrial-soil","glacier-or-permafrost","aquatic-sediment","aquatic") and 
+# ring_names is c("HUMAN","MOUSE","CHICEN","COW","SOIL","GLACIER","AQUATIC_SEDIMENT","AQUATIC")
+# mouse and mouse both have to be at the same index
+# output_pdf could be circ_plot_int.pdf
+make_arch_plot = function(species_taxa_to_ID_map_file,taxa_counts_file,tree_file,ring_order,ring_names,output_pdf) {
+  species_to_taxID = read.csv(species_taxa_to_ID_map_file)
+  taxa_counts = read.table(taxa_counts_file,sep="\t",header=TRUE)
+  colnames(species_to_taxID) = c("species","IDs")
+  taxa_counts$IDs = species_to_taxID[match(taxa_counts$species,species_to_taxID$species),"IDs"]
+  # convert from wide to long
+  taxa_counts_wide = reshape2::dcast(taxa_counts,IDs ~ biome,value.var="geneNum_norm")
+  taxa_counts_wide[is.na(taxa_counts_wide)] = 0
+  # add phylum and species
+  taxa_counts_wide$phylum = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("phylum"),]
+  taxa_counts_wide$species = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("species"),]
+  # we want to color our rows by phylum, but only highly prevalent phylum. Make rest other
+  phyla_of_interest = table(taxa_counts_wide$phylum) %>% data.frame %>% filter(Freq>10) %>% select(Var1)
+  colnames(phyla_of_interest) = c('phylum')
+  phyla_of_interest$color = as.character(phyla_of_interest$phylum)
+  taxa_counts_wide = left_join(taxa_counts_wide,phyla_of_interest)
+  taxa_counts_wide$color[is.na(taxa_counts_wide$color)] = 'Other'
+  # load in tree
+  tree=phytools::read.newick(tree_file)
+  taxa_counts_wide_ordered = taxa_counts_wide[match(tree$tip.label,taxa_counts_wide$IDs),]
+  # change tip labels to species name instead of ID
+  tree$tip.label = taxa_counts_wide_ordered$species
+  rownames(taxa_counts_wide_ordered) = taxa_counts_wide_ordered$species
+  # merge phylogenetic tree with metadata
+  tr2 <- phylo4d(tree, taxa_counts_wide_ordered,rownamesAsLabels=TRUE, match.data=F)
+  # edit column names
+  # remove first and last 3 columns
+  cols_to_remove = c(1,seq(ncol(taxa_counts_wide_ordered)-2,ncol(taxa_counts_wide_ordered)))
+  mappingfile_heatmap = taxa_counts_wide_ordered[,-cols_to_remove]
+  mappingfile_heatmap = as.matrix(mappingfile_heatmap)
+  mappingfile_heatmap_log = log2(mappingfile_heatmap+ min(mappingfile_heatmap[mappingfile_heatmap>0]))
+  # order and name column names as I like
+  mappingfile_heatmap_log = mappingfile_heatmap_log[,ring_order]
+  colnames(mappingfile_heatmap_log) =ring_names
+
+  p = ggtree(tr2,layout = 'circ',aes(color=color))+geom_tiplab(size=8 ,align=TRUE, linesize=.5,offset = 6) +theme_tree2()
+  p1 = gheatmap(p,data=mappingfile_heatmap_log, colnames_angle=90,hjust=1,offset=0, width=.5, colnames=TRUE, legend_title=element_blank()) + scale_fill_viridis_c(option="B")
+  ggsave(plot = p1,output_pdf,height=30,width=30)
+}
+
+
+make_arch_plot("species_taxa_to_ID_map.csv","gut_env_taxa_counts.txt","ncbi_tree_gut_env.nw",c("gut","mouse","chicken","cow","terrestrial-soil","glacier-or-permafrost","aquatic-sediment","aquatic"),c("HUMAN","MOUSE","CHICEN","COW","SOIL","GLACIER","AQUATIC_SEDIMENT","AQUATIC"),"circ_plot_int.pdf")
+
+make_arch_plot("species_taxa_to_ID_map_gut_or_env.csv","gut_or_env_taxa_counts.txt","ncbi_tree_gut_or_env.nw",c("gut","mouse","chicken","cow","terrestrial-soil","glacier-or-permafrost","aquatic-sediment","aquatic"),c("HUMAN","MOUSE","CHICEN","COW","SOIL","GLACIER","AQUATIC_SEDIMENT","AQUATIC"),"circ_plot_int_gut_or_env.pdf")
+
+```
+
+#also do this but only on genes that are human gut genes
+
+```{bash}
+
+cd /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/arch_plots_v2
+
+wget https://figshare.com/ndownloader/files/27874317
+mv 27874317 multi_map_30_collapsed.tsv.gz
+# first get genes list of gut-env genes
+awk '{print $1}' /n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/gene_abundances/pval_tables_all_comparisons/sig_gene_binary_mats/GUT_ENV_CONGENES_SEQS_sigGenes_intersections_binary_mat.txt | grep -v "geneNames" > gut_env_consensus_genes.txt
+
+zcat multi_map_30_collapsed.tsv.gz | grep -w -F -f  gut_env_consensus_genes.txt > gut_env_consensus_genes.tsv
+
+sbatch -c 1 -t 0-11:59 -p short --mem=10G extract_genes_from_multi_map_30_collapsed.tsv.bash gut_env_consensus_genes.txt gut_env_consensus_genes.tsv
+
+# now get list of human gut, non human gut genes
+awk '{print $1}' gene_taxID_ecology_human_vs_non_gut.txt | grep -v "gene" | sort | uniq > human_non_gut_gene_name_list.txt
+sbatch -c 1 -t 0-11:59 -p short --mem=10G extract_genes_from_multi_map_30_collapsed.tsv.bash human_non_gut_gene_name_list.txt human_non_gut_consensus_genes.tsv
+
+```
+
+```{r}
+library(parallel)
+library(data.table)
+setwd("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/arch_plots_v2")
+filesA = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/CAT_output/",pattern=".ORF2LCA_named.txt",recursive = TRUE,full.names = TRUE)
+filesB = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/diamond_output/",pattern="_tax_names_annotated.txt",full.names = TRUE)
+all_annotation_files = c(filesA,filesB)
+
+gene_mappings_files = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/n",pattern=".gene.mapping.txt",recursive = TRUE,full.names = TRUE)
+gene_mapping_sampleNames = sapply(strsplit(gene_mappings_files,split="/"), function(x) x[length(x)-1])
+gene_mapping_sampleNames = gsub("_prokka_out","",gene_mapping_sampleNames)
+gene_mapping_files_df = data.frame(gene_mapping_sampleNames,gene_mappings_files)
+
+
+sample_metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+
+consensus_to_raw_geneList = fread("human_non_gut_consensus_genes.tsv",header=FALSE,sep="\t")
+raw_gene_list = unique(consensus_to_raw_geneList$V1)
+split_raw_genes = strsplit(raw_gene_list, split="_")
+raw_gene_list_no_eco = sapply(split_raw_genes, function(x) paste(x[-1],collapse="_"))
+raw_gene_prokka_id = sapply(split_raw_genes,function(x) x[2])
+raw_gene_list_df = data.frame(raw_gene_list_no_eco,raw_gene_prokka_id)
+raw_gene_list_dt= as.data.table(raw_gene_list_df)
+setkey(raw_gene_list_dt,raw_gene_prokka_id)
+unique_prokka_ids = unique(raw_gene_prokka_id)
+# get ecology of every raw gene
+raw_gene_ecologies = sapply(split_raw_genes, function(x) x[1])
+num_genes_each_ecology = table(raw_gene_ecologies)
+num_genes_each_ecology_df = data.frame(names(num_genes_each_ecology),as.numeric(num_genes_each_ecology))
+gene_numbers_each_sample = mclapply(all_annotation_files, function(x)  {
+  annotation_df_temp = fread(x,sep="\t",header=TRUE,fill=TRUE)
+  total_num_genes = nrow(annotation_df_temp)
+  # only keep species level annotations
+  annotation_df_temp = annotation_df_temp[species != "no support" & !is.na(species) & species!=""]
+  # remove uncultured bacterium
+  annotation_df_temp = annotation_df_temp[species != "uncultured bacterium"]
+  # species IDs
+  #speciesIDs = strsplit(annotation_df_temp$lineage,split=";")
+  #speciesIDs = sapply(speciesIDs, function(x) x[length(x)])
+  #species_annotations = annotation_df_temp$species
+  # remove stars
+  annotation_df_temp$species = gsub("*","",annotation_df_temp$species,fixed=TRUE)
+  #annotation_df_temp$speciesIDs = speciesIDs
+  
+  # now get sample name
+  sampleBasename = basename(x)
+  sampleName = gsub("_prokka_out.ORF2LCA_named.txt","",sampleBasename)
+  sampleName = gsub("_tax_names_annotated.txt","",sampleName)
+  
+  if(sampleName%in%sample_metadata$prokka_id) {
+    metadata_index = match(sampleName,sample_metadata$prokka_id)
+    sampleName = sample_metadata[metadata_index,"sample"]
+    prokka_name = sample_metadata[metadata_index,"prokka_id"]
+  } else {
+    metadata_index = match(sampleName,sample_metadata$sample)
+    prokka_name = sample_metadata[metadata_index,"prokka_id"]
+  }
+    # match sample name to biome
+  biome = sample_metadata[match(sampleName,sample_metadata$sample),"ecology",]
+
+  # load in mapping file
+  mapping_file_temp = gene_mapping_files_df[match(sampleName,gene_mapping_files_df[,1]),2]
+  if(!is.na(mapping_file_temp)) {
+    mapping_df_temp = fread(mapping_file_temp,header=FALSE,sep="\t",data.table=FALSE)
+    actual_gene_name = mapping_df_temp[match(annotation_df_temp$`# ORF`,mapping_df_temp[,2]),"V1"]
+    annotation_df_temp$actual_gene_name = actual_gene_name
+  } else {
+    annotation_df_temp$actual_gene_name = sapply(strsplit(annotation_df_temp$`# ORF`,split="_"), function(x) paste(x[-1],collapse="_"))
+  }
+  # only keep genes in raw_gene_list
+  sample_has_raw_genes = prokka_name%in%unique_prokka_ids
+  if(sample_has_raw_genes == TRUE) {
+    raw_gene_list_df_temp = raw_gene_list_dt[prokka_name]
+    genes_to_keep = intersect(raw_gene_list_df_temp$raw_gene_list_no_eco,annotation_df_temp$actual_gene_name)
+    if(length(genes_to_keep)>0) {
+      setkey(annotation_df_temp,actual_gene_name)
+      annotation_df_temp = annotation_df_temp[genes_to_keep]
+      annotation_df_temp_summary = annotation_df_temp[,.N,by=.(phylum,species)]
+      annotation_df_temp_summary$biome = biome
+      return(annotation_df_temp_summary)
+    } else {
+      return(NULL) 
+    }
+  } else {
+    return(NULL)    
+  }
+},mc.cores=10,mc.preschedule = TRUE)
+
+saveRDS(gene_numbers_each_sample,"gene_numbers_each_sample_human_non_gut_specific.rds")
+saveRDS(raw_gene_list_dt,"human_non_gut_raw_genes_dt.rds")
+saveRDS(num_genes_each_ecology_df,"num_genes_each_ecology_df_human_non_gut.rds")
+```
+
+#Run the script above
+
+```{bash}
+sbatch -c 11 -t 0-11:59 -p short --mem=100G get_human_non_gut_taxa_info.bash
+```
+
+#Now continue where the previous R script left off
+
+```{r}
+library(data.table)
+gene_numbers_each_sample = readRDS("gene_numbers_each_sample_human_non_gut_specific.rds")
+raw_gene_list_dt = readRDS("human_non_gut_raw_genes_dt.rds")
+num_genes_each_ecology_df = readRDS("num_genes_each_ecology_df_human_non_gut.rds")
+# remove NULL
+gene_numbers_each_sample = gene_numbers_each_sample[!sapply(gene_numbers_each_sample, is.null)]
+
+gene_numbers_each_sample_dt = rbindlist(gene_numbers_each_sample)
+# now combine results
+gene_numbers_each_sample_dt_specific_total = gene_numbers_each_sample_dt[,sum(N),by=.(phylum,species,biome)]
+
+gene_numbers_each_sample_dt_specific_total$biome = gsub("gut","GUT",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("oral","ORAL",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("skin","SKIN",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("airways","AIRWAYS",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("vaginal","VAGINAL",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("nasal","NASAL",gene_numbers_each_sample_dt_specific_total$biome)
+
+# for each count divide by the total number of genes found in a biome to normalize for total number of genes in biome
+colnames(num_genes_each_ecology_df) = c("biome","geneNumber")
+
+total_genes_per_biome_ordered = num_genes_each_ecology_df[match(gene_numbers_each_sample_dt_specific_total$biome,num_genes_each_ecology_df$biome),]
+gene_numbers_each_sample_dt_specific_total$geneNum_norm = gene_numbers_each_sample_dt_specific_total$V1/total_genes_per_biome_ordered[,2]
+
+# get top 250 species only
+top_species = gene_numbers_each_sample_dt_specific_total[,sum(geneNum_norm),by=species]
+top_species = top_species[order(V1,decreasing = TRUE)][1:250]
+top_species = top_species$species
+gene_numbers_each_sample_dt_specific_total = gene_numbers_each_sample_dt_specific_total[species%in%top_species]
+
+write.table(gene_numbers_each_sample_dt_specific_total,file="human_specific_taxa_counts_v1.txt",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+
+```
+
+```{python}
+import pandas as pd
+import os
+from ete3 import NCBITaxa
+ncbi = NCBITaxa()
+#ncbi.update_taxonomy_database()
+human_counts = pd.read_csv("human_specific_taxa_counts_v1.txt",sep="\t")
+
+species_names = set(human_counts["species"].tolist())
+species_names = list(species_names)
+
+name2taxid = ncbi.get_name_translator(species_names)
+
+# look to see if we missed any
+for x in species_names:
+  if(x not in name2taxid.keys()):
+    print(x)
+# Tannerella sp. oral taxon HOT-286 not found. lets manually look it up
+name2taxid['Tannerella sp. oral taxon HOT-286'] = [712710]
+name2taxid['Mycoplasma hominis'] = [2098]
+name2taxid['[Propionibacterium] humerusii'] = [2559073]
+
+taxIDs = [x[0] for x in list(name2taxid.values())]
+
+tree = ncbi.get_topology(taxIDs)
+len(tree.get_leaves()) # all 250 leaves are there. perfect
+tree.write(format=1, outfile="ncbi_tree_human_v1.nw")
+# also write the species to ID mapping. I have a feeling I will need that
+species_taxa_to_ID_map = pd.DataFrame({"taxa":list(name2taxid.keys()),"IDs":taxIDs})
+species_taxa_to_ID_map.to_csv("species_taxa_to_ID_map_human_v1.csv",index=False)
+```
+
+##Now make plot
+
+```{r}
+library(phytools)
+library(phylobase)
+library(reshape2)
+library(dplyr)
+library(ggtree)
+library(ggplot2)
+#species_taxa_to_ID_map.csv
+#gut_env_taxa_counts.txt
+#ncbi_tree_gut_env.nw
+# ring_order and ring_names must have same length and correspond to each other. For example if 
+# ring_order is c("gut","mouse","chicken","cow","terrestrial-soil","glacier-or-permafrost","aquatic-sediment","aquatic") and 
+# ring_names is c("HUMAN","MOUSE","CHICEN","COW","SOIL","GLACIER","AQUATIC_SEDIMENT","AQUATIC")
+# mouse and mouse both have to be at the same index
+# output_pdf could be circ_plot_int.pdf
+make_arch_plot = function(species_taxa_to_ID_map_file,taxa_counts_file,tree_file,ring_order,ring_names,output_pdf) {
+  species_to_taxID = read.csv(species_taxa_to_ID_map_file)
+  taxa_counts = read.table(taxa_counts_file,sep="\t",header=TRUE)
+  colnames(species_to_taxID) = c("species","IDs")
+  taxa_counts$IDs = species_to_taxID[match(taxa_counts$species,species_to_taxID$species),"IDs"]
+  # convert from wide to long
+  taxa_counts_wide = reshape2::dcast(taxa_counts,IDs ~ biome,value.var="geneNum_norm")
+  taxa_counts_wide[is.na(taxa_counts_wide)] = 0
+  # add phylum and species
+  taxa_counts_wide$phylum = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("phylum"),]
+  taxa_counts_wide$species = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("species"),]
+  # we want to color our rows by phylum, but only highly prevalent phylum. Make rest other
+  phyla_of_interest = table(taxa_counts_wide$phylum) %>% data.frame %>% filter(Freq>10) %>% select(Var1)
+  colnames(phyla_of_interest) = c('phylum')
+  phyla_of_interest$color = as.character(phyla_of_interest$phylum)
+  taxa_counts_wide = left_join(taxa_counts_wide,phyla_of_interest)
+  taxa_counts_wide$color[is.na(taxa_counts_wide$color)] = 'Other'
+  # load in tree
+  tree=phytools::read.newick(tree_file)
+  taxa_counts_wide_ordered = taxa_counts_wide[match(tree$tip.label,taxa_counts_wide$IDs),]
+  # change tip labels to species name instead of ID
+  tree$tip.label = taxa_counts_wide_ordered$species
+  rownames(taxa_counts_wide_ordered) = taxa_counts_wide_ordered$species
+  # merge phylogenetic tree with metadata
+  tr2 <- phylo4d(tree, taxa_counts_wide_ordered,rownamesAsLabels=TRUE, match.data=F)
+  # edit column names
+  # remove first and last 3 columns
+  cols_to_remove = c(1,seq(ncol(taxa_counts_wide_ordered)-2,ncol(taxa_counts_wide_ordered)))
+  mappingfile_heatmap = taxa_counts_wide_ordered[,-cols_to_remove]
+  mappingfile_heatmap = as.matrix(mappingfile_heatmap)
+  mappingfile_heatmap_log = log2(mappingfile_heatmap+ min(mappingfile_heatmap[mappingfile_heatmap>0]))
+  # order and name column names as I like
+  mappingfile_heatmap_log = mappingfile_heatmap_log[,ring_order]
+  colnames(mappingfile_heatmap_log) =ring_names
+
+  p = ggtree(tr2,layout = 'circ',aes(color=color))+geom_tiplab(size=8 ,align=TRUE, linesize=.5,offset = 6) +theme_tree2()
+  p1 = gheatmap(p,data=mappingfile_heatmap_log, colnames_angle=90,hjust=1,offset=0, width=.5, colnames=TRUE, legend_title=element_blank()) + scale_fill_viridis_c(option="B")
+  ggsave(plot = p1,output_pdf,height=30,width=30)
+  return(mappingfile_heatmap_log)
+}
+
+
+species_taxa_to_ID_map_human_v1_heatmap = make_arch_plot("species_taxa_to_ID_map_human_v1.csv","human_specific_taxa_counts_v1.txt","ncbi_tree_human_v1.nw",c("GUT","ORAL","AIRWAYS","NASAL","SKIN","VAGINAL"),c("GUT","ORAL","AIRWAYS","NASAL","SKIN","VAGINAL"),"circ_plot_int_human_only_v1.pdf")
+
+species_taxa_to_ID_map_human_v1_heatmap_bin = species_taxa_to_ID_map_human_v1_heatmap>0
+species_taxa_to_ID_map_human_v1_heatmap_bin[species_taxa_to_ID_map_human_v1_heatmap_bin==TRUE] = 1
+species_taxa_to_ID_map_human_v1_heatmap_bin[species_taxa_to_ID_map_human_v1_heatmap_bin==FALSE] = 0
+which(rowSums(species_taxa_to_ID_map_human_v1_heatmap_bin) == 6)
+```
+
+##Now do a second version where I get all microbes in common between human microbiome but don't exclude genes in other microbiomes
+
+```{r}
+# first thing to do is get the frequency of each species level annotation in each 
+
+setwd("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/arch_plots_v2")
+filesA = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/CAT_output/",pattern=".ORF2LCA_named.txt",recursive = TRUE,full.names = TRUE)
+filesB = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/diamond_output/",pattern="_tax_names_annotated.txt",full.names = TRUE)
+all_annotation_files = c(filesA,filesB)
+
+#gene_mappings_files = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/n",pattern=".gene.mapping.txt",recursive = TRUE,full.names = TRUE)
+#gene_mapping_sampleNames = sapply(strsplit(gene_mappings_files,split="/"), function(x) x[length(x)-1])
+#gene_mapping_sampleNames = gsub("_prokka_out","",gene_mapping_sampleNames)
+#gene_mapping_files_df = data.frame(gene_mapping_sampleNames,gene_mappings_files)
+
+sample_metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+
+library(data.table)
+gene_numbers_each_sample_dt = readRDS("gene_numbers_each_sample_dt.rds")
+gene_num_each_sample_list = readRDS("gene_num_each_sample_list.rds")
+
+# now only use species that are in any of the human environments
+
+species_in_human = gene_numbers_each_sample_dt[,.(inHuman=sum(unique(biome)%in%c("gut","oral","skin","airways","vaginal","nasal"))),by=.(species)]
+species_in_human = species_in_human[inHuman>0,"species"]
+species_in_human = species_in_human$species
+gene_numbers_each_sample_human_specific = gene_numbers_each_sample_dt[species%in%species_in_human]
+# oh also only keep gut and environment biomes
+human_biomes = c("gut","oral","skin","airways","vaginal","nasal")
+gene_numbers_each_sample_human_specific = gene_numbers_each_sample_human_specific[biome%in%human_biomes]
+# now combine results
+gene_numbers_each_sample_human_specific_total = gene_numbers_each_sample_human_specific[,sum(N),by=.(phylum,species,biome)]
+
+# for each count divide by the total number of genes found in a biome to normalize for total number of genes in biome
+
+gene_num_each_sample_list_dt = as.data.table(gene_num_each_sample_list)
+total_genes_per_biome = gene_num_each_sample_list_dt[,sum(V2),by=V1]
+colnames(total_genes_per_biome) = c("biome","geneNumber")
+total_genes_per_biome = as.data.frame(total_genes_per_biome)
+
+total_genes_per_biome_ordered = total_genes_per_biome[match(gene_numbers_each_sample_human_specific_total$biome,total_genes_per_biome$biome),]
+gene_numbers_each_sample_human_specific_total$geneNum_norm = gene_numbers_each_sample_human_specific_total$V1/total_genes_per_biome_ordered[,2]
+
+# get top 250 species only
+top_species = gene_numbers_each_sample_human_specific_total[,sum(geneNum_norm),by=species]
+top_species = top_species[order(V1,decreasing = TRUE)][1:250]
+top_species = top_species$species
+gene_numbers_each_sample_human_specific_total = gene_numbers_each_sample_human_specific_total[species%in%top_species]
+
+write.table(gene_numbers_each_sample_human_specific_total,file="human_specific_taxa_counts_v2.txt",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+
+```
+
+```{python}
+import pandas as pd
+import os
+from ete3 import NCBITaxa
+ncbi = NCBITaxa()
+#ncbi.update_taxonomy_database()
+human_counts = pd.read_csv("human_specific_taxa_counts_v2.txt",sep="\t")
+
+species_names = set(human_counts["species"].tolist())
+species_names = list(species_names)
+
+name2taxid = ncbi.get_name_translator(species_names)
+
+# look to see if we missed any
+for x in species_names:
+  if(x not in name2taxid.keys()):
+    print(x)
+# Tannerella sp. oral taxon HOT-286 not found. lets manually look it up
+name2taxid['Tannerella sp. oral taxon HOT-286'] = [712710]
+name2taxid['Mycoplasma hominis'] = [2098]
+name2taxid['Bacteroidales bacterium Oil-RF-744-WCA-WT-10'] = [2606626]
+
+taxIDs = [x[0] for x in list(name2taxid.values())]
+
+tree = ncbi.get_topology(taxIDs)
+len(tree.get_leaves()) # all 250 leaves are there. perfect
+tree.write(format=1, outfile="ncbi_tree_human_v2.nw")
+# also write the species to ID mapping. I have a feeling I will need that
+species_taxa_to_ID_map = pd.DataFrame({"taxa":list(name2taxid.keys()),"IDs":taxIDs})
+species_taxa_to_ID_map.to_csv("species_taxa_to_ID_map_human_v2.csv",index=False)
+```
+
+
+```{r}
+library(phytools)
+library(phylobase)
+library(reshape2)
+library(dplyr)
+library(ggtree)
+library(ggplot2)
+#species_taxa_to_ID_map.csv
+#gut_env_taxa_counts.txt
+#ncbi_tree_gut_env.nw
+# ring_order and ring_names must have same length and correspond to each other. For example if 
+# ring_order is c("gut","mouse","chicken","cow","terrestrial-soil","glacier-or-permafrost","aquatic-sediment","aquatic") and 
+# ring_names is c("HUMAN","MOUSE","CHICEN","COW","SOIL","GLACIER","AQUATIC_SEDIMENT","AQUATIC")
+# mouse and mouse both have to be at the same index
+# output_pdf could be circ_plot_int.pdf
+make_arch_plot = function(species_taxa_to_ID_map_file,taxa_counts_file,tree_file,ring_order,ring_names,output_pdf) {
+  species_to_taxID = read.csv(species_taxa_to_ID_map_file)
+  taxa_counts = read.table(taxa_counts_file,sep="\t",header=TRUE)
+  colnames(species_to_taxID) = c("species","IDs")
+  taxa_counts$IDs = species_to_taxID[match(taxa_counts$species,species_to_taxID$species),"IDs"]
+  # convert from wide to long
+  taxa_counts_wide = reshape2::dcast(taxa_counts,IDs ~ biome,value.var="geneNum_norm")
+  taxa_counts_wide[is.na(taxa_counts_wide)] = 0
+  # add phylum and species
+  taxa_counts_wide$phylum = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("phylum"),]
+  taxa_counts_wide$species = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("species"),]
+  # we want to color our rows by phylum, but only highly prevalent phylum. Make rest other
+  phyla_of_interest = table(taxa_counts_wide$phylum) %>% data.frame %>% filter(Freq>10) %>% select(Var1)
+  colnames(phyla_of_interest) = c('phylum')
+  phyla_of_interest$color = as.character(phyla_of_interest$phylum)
+  taxa_counts_wide = left_join(taxa_counts_wide,phyla_of_interest)
+  taxa_counts_wide$color[is.na(taxa_counts_wide$color)] = 'Other'
+  # load in tree
+  tree=phytools::read.newick(tree_file)
+  taxa_counts_wide_ordered = taxa_counts_wide[match(tree$tip.label,taxa_counts_wide$IDs),]
+  # change tip labels to species name instead of ID
+  tree$tip.label = taxa_counts_wide_ordered$species
+  rownames(taxa_counts_wide_ordered) = taxa_counts_wide_ordered$species
+  # merge phylogenetic tree with metadata
+  tr2 <- phylo4d(tree, taxa_counts_wide_ordered,rownamesAsLabels=TRUE, match.data=F)
+  # edit column names
+  # remove first and last 3 columns
+  cols_to_remove = c(1,seq(ncol(taxa_counts_wide_ordered)-2,ncol(taxa_counts_wide_ordered)))
+  mappingfile_heatmap = taxa_counts_wide_ordered[,-cols_to_remove]
+  mappingfile_heatmap = as.matrix(mappingfile_heatmap)
+  mappingfile_heatmap_log = log2(mappingfile_heatmap+ min(mappingfile_heatmap[mappingfile_heatmap>0]))
+  # order and name column names as I like
+  mappingfile_heatmap_log = mappingfile_heatmap_log[,ring_order]
+  colnames(mappingfile_heatmap_log) =ring_names
+
+  p = ggtree(tr2,layout = 'circ',aes(color=color))+geom_tiplab(size=8 ,align=TRUE, linesize=.5,offset = 6) +theme_tree2()
+  p1 = gheatmap(p,data=mappingfile_heatmap_log, colnames_angle=90,hjust=1,offset=0, width=.5, colnames=TRUE, legend_title=element_blank()) + scale_fill_viridis_c(option="B")
+  ggsave(plot = p1,output_pdf,height=30,width=30)
+}
+
+make_arch_plot("species_taxa_to_ID_map_human_v2.csv","human_specific_taxa_counts_v2.txt","ncbi_tree_human_v2.nw",c("gut","oral","airways","nasal","skin","vaginal"),c("GUT","ORAL","AIRWAYS","NASAL","SKIN","VAGINAL"),"circ_plot_int_human_only_v2.pdf")
+
+```
+
+##Do third version with just consensus genes
+
+```{r}
+library(parallel)
+library(data.table)
+setwd("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/arch_plots_v2")
+filesA = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/CAT_output/",pattern=".ORF2LCA_named.txt",recursive = TRUE,full.names = TRUE)
+filesB = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/diamond_output/",pattern="_tax_names_annotated.txt",full.names = TRUE)
+all_annotation_files = c(filesA,filesB)
+
+gene_mappings_files = list.files("/n/scratch3/users/l/ldp9/_RESTORE/orfletonV2_orf_annotation/n",pattern=".gene.mapping.txt",recursive = TRUE,full.names = TRUE)
+gene_mapping_sampleNames = sapply(strsplit(gene_mappings_files,split="/"), function(x) x[length(x)-1])
+gene_mapping_sampleNames = gsub("_prokka_out","",gene_mapping_sampleNames)
+gene_mapping_files_df = data.frame(gene_mapping_sampleNames,gene_mappings_files)
+
+
+sample_metadata = read.csv("/n/data1/joslin/icrb/kostic/szimmerman/OV2_fig3_4_complete_linkage/human_env_metadata_may_7_2021.csv")
+
+consensus_to_raw_geneList = fread("human_non_gut_consensus_genes.tsv",header=FALSE,sep="\t")
+raw_gene_list = unique(consensus_to_raw_geneList$V2)
+split_raw_genes = strsplit(raw_gene_list, split="_")
+raw_gene_list_no_eco = sapply(split_raw_genes, function(x) paste(x[-1],collapse="_"))
+raw_gene_prokka_id = sapply(split_raw_genes,function(x) x[2])
+raw_gene_list_df = data.frame(raw_gene_list_no_eco,raw_gene_prokka_id)
+raw_gene_list_dt= as.data.table(raw_gene_list_df)
+setkey(raw_gene_list_dt,raw_gene_prokka_id)
+unique_prokka_ids = unique(raw_gene_prokka_id)
+# get ecology of every raw gene
+raw_gene_ecologies = sapply(split_raw_genes, function(x) x[1])
+num_genes_each_ecology = table(raw_gene_ecologies)
+num_genes_each_ecology_df = data.frame(names(num_genes_each_ecology),as.numeric(num_genes_each_ecology))
+
+# before we loop only loop through annotation files that the consensus genes are in
+annotation_files_basename = basename(all_annotation_files)
+annotation_files_basename_sampleName = gsub("_prokka_out.ORF2LCA_named.txt","",annotation_files_basename)
+annotation_files_basename_sampleName = gsub("_tax_names_annotated.txt","",annotation_files_basename_sampleName)
+
+annotation_files_basename_prokkaNames = sapply(annotation_files_basename_sampleName, function(sampleName) {
+  if(sampleName%in%sample_metadata$prokka_id) {
+    metadata_index_temp = match(sampleName,sample_metadata$prokka_id)
+    prokka_id = sample_metadata[metadata_index_temp,"prokka_id"]
+    return(prokka_id)
+  } else {
+    metadata_index_temp = match(sampleName,sample_metadata$sample)
+    prokka_id = sample_metadata[metadata_index_temp,"prokka_id"]
+    return(prokka_id)
+  }
+})
+
+all_annotation_files = all_annotation_files[annotation_files_basename_prokkaNames%in%unique_prokka_ids]
+
+gene_numbers_each_sample = mclapply(all_annotation_files, function(x)  {
+  annotation_df_temp = fread(x,sep="\t",header=TRUE,fill=TRUE)
+  total_num_genes = nrow(annotation_df_temp)
+  # only keep species level annotations
+  annotation_df_temp = annotation_df_temp[species != "no support" & !is.na(species) & species!=""]
+  # remove uncultured bacterium
+  annotation_df_temp = annotation_df_temp[species != "uncultured bacterium"]
+  # species IDs
+  #speciesIDs = strsplit(annotation_df_temp$lineage,split=";")
+  #speciesIDs = sapply(speciesIDs, function(x) x[length(x)])
+  #species_annotations = annotation_df_temp$species
+  # remove stars
+  annotation_df_temp$species = gsub("*","",annotation_df_temp$species,fixed=TRUE)
+  #annotation_df_temp$speciesIDs = speciesIDs
+  
+  # now get sample name
+  sampleBasename = basename(x)
+  sampleName = gsub("_prokka_out.ORF2LCA_named.txt","",sampleBasename)
+  sampleName = gsub("_tax_names_annotated.txt","",sampleName)
+  
+  if(sampleName%in%sample_metadata$prokka_id) {
+    metadata_index = match(sampleName,sample_metadata$prokka_id)
+    sampleName = sample_metadata[metadata_index,"sample"]
+    prokka_name = sample_metadata[metadata_index,"prokka_id"]
+  } else {
+    metadata_index = match(sampleName,sample_metadata$sample)
+    prokka_name = sample_metadata[metadata_index,"prokka_id"]
+  }
+    # match sample name to biome
+  biome = sample_metadata[match(sampleName,sample_metadata$sample),"ecology",]
+
+  # load in mapping file
+  mapping_file_temp = gene_mapping_files_df[match(sampleName,gene_mapping_files_df[,1]),2]
+  if(!is.na(mapping_file_temp)) {
+    mapping_df_temp = fread(mapping_file_temp,header=FALSE,sep="\t",data.table=FALSE)
+    actual_gene_name = mapping_df_temp[match(annotation_df_temp$`# ORF`,mapping_df_temp[,2]),"V1"]
+    annotation_df_temp$actual_gene_name = actual_gene_name
+  } else {
+    annotation_df_temp$actual_gene_name = sapply(strsplit(annotation_df_temp$`# ORF`,split="_"), function(x) paste(x[-1],collapse="_"))
+  }
+  # only keep genes in raw_gene_list
+  sample_has_raw_genes = prokka_name%in%unique_prokka_ids
+  if(sample_has_raw_genes == TRUE) {
+    raw_gene_list_df_temp = raw_gene_list_dt[prokka_name]
+    genes_to_keep = intersect(raw_gene_list_df_temp$raw_gene_list_no_eco,annotation_df_temp$actual_gene_name)
+    if(length(genes_to_keep)>0) {
+      setkey(annotation_df_temp,actual_gene_name)
+      annotation_df_temp = annotation_df_temp[genes_to_keep]
+      annotation_df_temp_summary = annotation_df_temp[,.N,by=.(phylum,species)]
+      annotation_df_temp_summary$biome = biome
+      return(annotation_df_temp_summary)
+    } else {
+      return(NULL) 
+    }
+  } else {
+    return(NULL)    
+  }
+},mc.cores=10,mc.preschedule = TRUE)
+
+saveRDS(gene_numbers_each_sample,"gene_numbers_each_sample_human_non_gut_specific_consensus_only.rds")
+saveRDS(raw_gene_list_dt,"human_non_gut_consensus_genes_dt.rds")
+saveRDS(num_genes_each_ecology_df,"num_genes_each_ecology_df_human_non_gut_consensus_only.rds")
+
+```
+
+```{bash}
+sbatch -c 11 -t 0-11:59 -p short --mem=100G get_human_non_gut_taxa_info_consensus_only.bash
+
+```
+
+```{r}
+library(data.table)
+gene_numbers_each_sample = readRDS("gene_numbers_each_sample_human_non_gut_specific_consensus_only.rds")
+raw_gene_list_dt = readRDS("human_non_gut_consensus_genes_dt.rds")
+num_genes_each_ecology_df = readRDS("num_genes_each_ecology_df_human_non_gut_consensus_only.rds")
+# remove NULL
+gene_numbers_each_sample = gene_numbers_each_sample[!sapply(gene_numbers_each_sample, is.null)]
+
+gene_numbers_each_sample_dt = rbindlist(gene_numbers_each_sample)
+# now combine results
+gene_numbers_each_sample_dt_specific_total = gene_numbers_each_sample_dt[,sum(N),by=.(phylum,species,biome)]
+
+gene_numbers_each_sample_dt_specific_total$biome = gsub("gut","GUT",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("oral","ORAL",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("skin","SKIN",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("airways","AIRWAYS",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("vaginal","VAGINAL",gene_numbers_each_sample_dt_specific_total$biome)
+gene_numbers_each_sample_dt_specific_total$biome = gsub("nasal","NASAL",gene_numbers_each_sample_dt_specific_total$biome)
+
+#for each count divide by the total number of genes found in a biome to normalize for total number of genes in biome
+colnames(num_genes_each_ecology_df) = c("biome","geneNumber")
+
+total_genes_per_biome_ordered = num_genes_each_ecology_df[match(gene_numbers_each_sample_dt_specific_total$biome,num_genes_each_ecology_df$biome),]
+gene_numbers_each_sample_dt_specific_total$geneNum_norm = gene_numbers_each_sample_dt_specific_total$V1/total_genes_per_biome_ordered[,2]
+
+# get top 250 species only
+top_species = gene_numbers_each_sample_dt_specific_total[,sum(geneNum_norm),by=species]
+top_species = top_species[order(V1,decreasing = TRUE)][1:250]
+top_species = top_species$species
+gene_numbers_each_sample_dt_specific_total = gene_numbers_each_sample_dt_specific_total[species%in%top_species]
+
+
+write.table(gene_numbers_each_sample_dt_specific_total,file="human_specific_taxa_counts_v3.txt",sep="\t",col.names=TRUE,row.names=FALSE,quote=FALSE)
+
+```
+
+```{python}
+import pandas as pd
+import os
+from ete3 import NCBITaxa
+ncbi = NCBITaxa()
+#ncbi.update_taxonomy_database()
+human_counts = pd.read_csv("human_specific_taxa_counts_v3.txt",sep="\t")
+
+species_names = set(human_counts["species"].tolist())
+species_names = list(species_names)
+
+name2taxid = ncbi.get_name_translator(species_names)
+
+# look to see if we missed any
+for x in species_names:
+  if(x not in name2taxid.keys()):
+    print(x)
+# Tannerella sp. oral taxon HOT-286  and Pseudomonas stutzerinot found. lets manually look it up
+name2taxid['[Propionibacterium] namnetense'] = [1574624]
+name2taxid['[Propionibacterium] humerusii'] = [2559073]
+name2taxid['Veillonellaceae bacterium KA00182'] = [1588748]
+name2taxid['Mycoplasma hominis'] = [2098]
+name2taxid['Tannerella sp. oral taxon HOT-286'] = [712710]
+name2taxid['Lactobacillus hilgardii'] = [1588]
+
+taxIDs = [x[0] for x in list(name2taxid.values())]
+
+tree = ncbi.get_topology(taxIDs)
+len(tree.get_leaves()) # all 250 leaves are there. perfect
+tree.write(format=1, outfile="ncbi_tree_human_v3.nw")
+# also write the species to ID mapping. I have a feeling I will need that
+species_taxa_to_ID_map = pd.DataFrame({"taxa":list(name2taxid.keys()),"IDs":taxIDs})
+species_taxa_to_ID_map.to_csv("species_taxa_to_ID_map_human_v3.csv",index=False)
+
+```
+
+```{r}
+library(phytools)
+library(phylobase)
+library(reshape2)
+library(dplyr)
+library(ggtree)
+library(ggplot2)
+#species_taxa_to_ID_map.csv
+#gut_env_taxa_counts.txt
+#ncbi_tree_gut_env.nw
+# ring_order and ring_names must have same length and correspond to each other. For example if 
+# ring_order is c("gut","mouse","chicken","cow","terrestrial-soil","glacier-or-permafrost","aquatic-sediment","aquatic") and 
+# ring_names is c("HUMAN","MOUSE","CHICEN","COW","SOIL","GLACIER","AQUATIC_SEDIMENT","AQUATIC")
+# mouse and mouse both have to be at the same index
+# output_pdf could be circ_plot_int.pdf
+make_arch_plot = function(species_taxa_to_ID_map_file,taxa_counts_file,tree_file,ring_order,ring_names,output_pdf) {
+  species_to_taxID = read.csv(species_taxa_to_ID_map_file)
+  taxa_counts = read.table(taxa_counts_file,sep="\t",header=TRUE)
+  colnames(species_to_taxID) = c("species","IDs")
+  taxa_counts$IDs = species_to_taxID[match(taxa_counts$species,species_to_taxID$species),"IDs"]
+  # convert from wide to long
+  taxa_counts_wide = reshape2::dcast(taxa_counts,IDs ~ biome,value.var="geneNum_norm")
+  taxa_counts_wide[is.na(taxa_counts_wide)] = 0
+  # add phylum and species
+  taxa_counts_wide$phylum = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("phylum"),]
+  taxa_counts_wide$species = taxa_counts[match(taxa_counts_wide$IDs,taxa_counts$IDs),c("species"),]
+  # we want to color our rows by phylum, but only highly prevalent phylum. Make rest other
+  phyla_of_interest = table(taxa_counts_wide$phylum) %>% data.frame %>% filter(Freq>10) %>% select(Var1)
+  colnames(phyla_of_interest) = c('phylum')
+  phyla_of_interest$color = as.character(phyla_of_interest$phylum)
+  taxa_counts_wide = left_join(taxa_counts_wide,phyla_of_interest)
+  taxa_counts_wide$color[is.na(taxa_counts_wide$color)] = 'Other'
+  # load in tree
+  tree=phytools::read.newick(tree_file)
+  taxa_counts_wide_ordered = taxa_counts_wide[match(tree$tip.label,taxa_counts_wide$IDs),]
+  # change tip labels to species name instead of ID
+  tree$tip.label = taxa_counts_wide_ordered$species
+  rownames(taxa_counts_wide_ordered) = taxa_counts_wide_ordered$species
+  # merge phylogenetic tree with metadata
+  tr2 <- phylo4d(tree, taxa_counts_wide_ordered,rownamesAsLabels=TRUE, match.data=F)
+  # edit column names
+  # remove first and last 3 columns
+  cols_to_remove = c(1,seq(ncol(taxa_counts_wide_ordered)-2,ncol(taxa_counts_wide_ordered)))
+  mappingfile_heatmap = taxa_counts_wide_ordered[,-cols_to_remove]
+  mappingfile_heatmap = as.matrix(mappingfile_heatmap)
+  mappingfile_heatmap_log = log2(mappingfile_heatmap+ min(mappingfile_heatmap[mappingfile_heatmap>0]))
+  # order and name column names as I like
+  mappingfile_heatmap_log = mappingfile_heatmap_log[,ring_order]
+  colnames(mappingfile_heatmap_log) =ring_names
+
+  p = ggtree(tr2,layout = 'circ',aes(color=color))+geom_tiplab(size=8 ,align=TRUE, linesize=.5,offset = 6) +theme_tree2()
+  p1 = gheatmap(p,data=mappingfile_heatmap_log, colnames_angle=90,hjust=1,offset=0, width=.5, colnames=TRUE, legend_title=element_blank()) + scale_fill_viridis_c(option="B")
+  ggsave(plot = p1,output_pdf,height=30,width=30)
+}
+
+
+make_arch_plot("species_taxa_to_ID_map_human_v3.csv","human_specific_taxa_counts_v3.txt","ncbi_tree_human_v3.nw",c("GUT","ORAL","AIRWAYS","NASAL","SKIN","VAGINAL"),c("GUT","ORAL","AIRWAYS","NASAL","SKIN","VAGINAL"),"circ_plot_int_human_only_v3.pdf")
+
+```
+
